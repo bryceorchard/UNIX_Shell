@@ -1,0 +1,35 @@
+\doxysection{parser.\+h}
+\hypertarget{parser_8h_source}{}\label{parser_8h_source}\index{include/parser.h@{include/parser.h}}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ \textcolor{comment}{//}}
+\DoxyCodeLine{00002\ \textcolor{comment}{//\ Created\ by\ Paula\ on\ 2024-\/07-\/27.}}
+\DoxyCodeLine{00003\ \textcolor{comment}{//}}
+\DoxyCodeLine{00004\ }
+\DoxyCodeLine{00005\ \textcolor{preprocessor}{\#ifndef\ PARSER\_H}}
+\DoxyCodeLine{00006\ \textcolor{preprocessor}{\#define\ PARSER\_H}}
+\DoxyCodeLine{00007\ \textcolor{preprocessor}{\#endif\ }\textcolor{comment}{//PARSER\_H}}
+\DoxyCodeLine{00008\ }
+\DoxyCodeLine{00009\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structcmdline}{cmdline}}\ *parsecmd(\textcolor{keywordtype}{char}\ **pline)\ ;}
+\DoxyCodeLine{00010\ }
+\DoxyCodeLine{00011\ \textcolor{comment}{/*\ Structure\ returned\ by\ parsecmd()\ function.\ seq\ is\ the\ sequence\ of\ commands\ */}}
+\DoxyCodeLine{00012\ \textcolor{keyword}{struct\ }\mbox{\hyperlink{structcmdline}{cmdline}}\ \{}
+\DoxyCodeLine{00013\ \ \ \ \ \textcolor{keywordtype}{char}\ *err;\ \ \ \ \ \ \textcolor{comment}{/*\ If\ not\ null,\ it\ is\ an\ error\ message\ that\ should\ be}}
+\DoxyCodeLine{00014\ \textcolor{comment}{\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ displayed.\ The\ other\ fields\ are\ null.\ */}}
+\DoxyCodeLine{00015\ \ \ \ \ \textcolor{keywordtype}{char}\ *in;\ \ \ \ \ \ \ \textcolor{comment}{/*\ If\ not\ null\ :\ name\ of\ file\ for\ input\ redirection.\ */}}
+\DoxyCodeLine{00016\ \ \ \ \ \textcolor{keywordtype}{char}\ *out;\ \ \ \ \ \ \textcolor{comment}{/*\ If\ not\ null\ :\ name\ of\ file\ for\ output\ redirection.\ */}}
+\DoxyCodeLine{00017\ \ \ \ \ \textcolor{keywordtype}{int}\ \ \ bg;\ \ \ \ \ \ \ \textcolor{comment}{/*\ If\ set\ the\ command\ must\ run\ in\ background\ */}}
+\DoxyCodeLine{00018\ \ \ \ \ \textcolor{keywordtype}{char}\ ***seq;\ \ \ \ \textcolor{comment}{/*\ See\ comment\ below\ */}}
+\DoxyCodeLine{00019\ \};}
+\DoxyCodeLine{00020\ }
+\DoxyCodeLine{00021\ \textcolor{comment}{/*\ Field\ seq\ of\ struct\ cmdline\ :}}
+\DoxyCodeLine{00022\ \textcolor{comment}{A\ command\ line\ is\ a\ sequence\ of\ commands\ whose\ output\ is\ linked\ to\ the\ input}}
+\DoxyCodeLine{00023\ \textcolor{comment}{of\ the\ next\ command\ by\ a\ pipe.\ To\ describe\ such\ a\ structure\ :}}
+\DoxyCodeLine{00024\ \textcolor{comment}{A\ command\ is\ an\ array\ of\ strings\ (char\ **),\ whose\ last\ item\ is\ a\ null\ pointer.}}
+\DoxyCodeLine{00025\ \textcolor{comment}{(first\ pointer\ to\ the\ array,\ second\ pointer\ to\ the\ string)}}
+\DoxyCodeLine{00026\ \textcolor{comment}{A\ sequence\ is\ an\ array\ of\ commands\ (char\ ***),\ whose\ last\ item\ is\ a\ null}}
+\DoxyCodeLine{00027\ \textcolor{comment}{pointer.}}
+\DoxyCodeLine{00028\ \textcolor{comment}{When\ the\ user\ enters\ an\ empty\ line,\ seq[0]\ is\ NULL.}}
+\DoxyCodeLine{00029\ \textcolor{comment}{*/}}
+
+\end{DoxyCode}

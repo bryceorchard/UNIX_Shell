@@ -1,0 +1,9 @@
+This line contains an error.
+This line contains a case sensitive ERROR
+And this one is just an Error.
+Then we have a warning.
+and a WARNING
+and then of course Warning.
+This is another line. 
+You can use this file for testing
+Here is another line with an error.
