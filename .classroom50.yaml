@@ -1,0 +1,12 @@
+schema: "classroom50/repo-config/v1"
+classroom: "coen-346-fall2026"
+assignment: "unix-shell"
+owner:
+  username: "icherfa"
+  id: 197845153
+  accepted_at: "2026-09-19T21:03:02Z"
+source:
+  owner: "ConcordiaPaulaLagoTeaching"
+  owner_id: 226771975
+  repo: "unix_shell_assignment"
+  branch: "main"
