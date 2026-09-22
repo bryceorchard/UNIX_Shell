@@ -15,6 +15,20 @@
  * @return
  */
 int execute_command(char* cmd, char** args, int in, int out, int bg) {
+    // TODO: Implement the function to execute a command with given arguments, input/output redirection, and background execution.
+    pid_t pid = fork();
+    
+    if (pid < 0) {
+        // failed fork creation
+    }
+    else if (pid == 0) { // child
+        execvp(cmd, args);
+        perror(cmd); // only reached if execvp fails
+        exit(EXIT_FAILURE);
+    } else {
+        wait(NULL);
+        // do nothing
+    }
     return EXIT_SUCCESS;
 }
 
@@ -37,6 +51,7 @@ int execute(struct cmdline *l){
         for (j=0; cmd[j]!=0; j++) {
             printf("'%s' ", cmd[j]);
         }
+        execute_command(cmd[0], cmd, 0, 0, 0);
         printf("\n");
     }
     return EXIT_SUCCESS;
