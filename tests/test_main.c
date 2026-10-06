@@ -76,6 +76,13 @@ void test_simple_command_execution() {
 }
 
 /**
+ * @brief Tests simple background execution without pipes or redirection.
+ */
+void test_background_execution() {
+    // todo
+}
+
+/**
  * @brief Tests command execution with a simple pipe.
  */
 // void test_pipe_execution() {
@@ -120,6 +127,7 @@ void test_simple_command_execution() {
 int main() {
     test_long_input_readline();
     test_simple_command_execution();
+    test_simple_background_execution();
     // test_pipe_execution();
 
     printf("\nRan %d tests, %d failed.\n", tests_run, tests_failed);
