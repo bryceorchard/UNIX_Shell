@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/time.h>
 #include "shell.h"
 #include "executor.h"
 
@@ -29,6 +30,13 @@ static int tests_failed = 0;
 #define TEST_ASSERT_EQUAL_STRING(expected, actual) do { \
     TEST_ASSERT(strcmp(expected, actual) == 0); \
 } while(0)
+
+// Small helper: seconds elapsed since `start`.
+static double elapsed_since(struct timeval start) {
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    return (now.tv_sec - start.tv_sec) + (now.tv_usec - start.tv_usec) / 1e6;
+}
 
 // ====================================================================
 // Test cases for the shell's functionality.
@@ -76,6 +84,90 @@ void test_simple_command_execution() {
 }
 
 /**
+ * @brief The parser should set bg=1 when a command ends with '&', and bg=0
+ *        otherwise, without reporting an error for valid lines.
+ */
+void test_parser_background_flag() {
+    // parsecmd() frees the line it is given, so hand it heap-allocated copies.
+    char *bg_line = strdup("sleep 1 &");
+    struct cmdline *l = parsecmd(&bg_line);
+    TEST_ASSERT(l != NULL);
+    TEST_ASSERT(l->err == NULL);
+    TEST_ASSERT(l->bg == 1);
+
+    char *fg_line = strdup("sleep 1");
+    l = parsecmd(&fg_line);
+    TEST_ASSERT(l != NULL);
+    TEST_ASSERT(l->err == NULL);
+    TEST_ASSERT(l->bg == 0);
+}
+
+/**
+ * @brief An '&' with no command before it (or with a command after it) is a
+ *        syntax error, so the parser should populate err.
+ */
+void test_parser_misplaced_ampersand() {
+    char *lone = strdup("&");
+    struct cmdline *l = parsecmd(&lone);
+    TEST_ASSERT(l != NULL);
+    TEST_ASSERT(l->err != NULL);
+
+    char *mid = strdup("echo & hi");
+    l = parsecmd(&mid);
+    TEST_ASSERT(l != NULL);
+    TEST_ASSERT(l->err != NULL);
+}
+
+/**
+ * @brief A foreground command should actually run the program: after
+ *        execute_command returns, the side effect (a created file) is visible.
+ *        This only holds if the parent waited for the child to finish.
+ */
+void test_foreground_runs_command() {
+    const char *marker = "/tmp/coen346_fg_marker";
+    unlink(marker); // start clean
+
+    char *args[] = {"sh", "-c", "echo ok > /tmp/coen346_fg_marker", NULL};
+    execute_command("sh", args, 0); // foreground
+
+    TEST_ASSERT(access(marker, F_OK) == 0);
+    unlink(marker);
+}
+
+/**
+ * @brief A foreground command must BLOCK until the child finishes. Running
+ *        `sleep 1` in the foreground should take roughly a full second.
+ */
+void test_foreground_blocks() {
+    char *args[] = {"sleep", "1", NULL};
+
+    struct timeval start;
+    gettimeofday(&start, NULL);
+    execute_command("sleep", args, 0); // foreground
+    double dt = elapsed_since(start);
+
+    TEST_ASSERT(dt >= 0.9); // we waited out the sleep
+}
+
+/**
+ * @brief A background command must NOT block. Launching `sleep 1` with bg=1
+ *        should return almost immediately, well before the sleep completes.
+ */
+void test_background_execution() {
+    char *args[] = {"sleep", "1", NULL};
+
+    struct timeval start;
+    gettimeofday(&start, NULL);
+    execute_command("sleep", args, 1); // background
+    double dt = elapsed_since(start);
+
+    TEST_ASSERT(dt < 0.5); // returned without waiting for the sleep
+
+    // Tidy up the child we just spawned so it does not linger as a zombie.
+    waitpid(-1, NULL, 0);
+}
+
+/**
  * @brief Tests command execution with a simple pipe.
  */
 // void test_pipe_execution() {
@@ -120,6 +212,11 @@ void test_simple_command_execution() {
 int main() {
     test_long_input_readline();
     test_simple_command_execution();
+    test_parser_background_flag();
+    test_parser_misplaced_ampersand();
+    test_foreground_runs_command();
+    test_foreground_blocks();
+    test_background_execution();
     // test_pipe_execution();
 
     printf("\nRan %d tests, %d failed.\n", tests_run, tests_failed);
@@ -130,4 +227,3 @@ int main() {
         return 1;
     }
 }
-
