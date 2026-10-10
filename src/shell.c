@@ -5,9 +5,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <limits.h> //for INT_MAX
+#include <sys/wait.h>
 
 #include "shell.h"
 #include "utils.h"
+#include "jobs.h"
 
 /**
  * Terminate the shell program
@@ -16,6 +18,8 @@
 void terminate(char *line) {
     if (line)
         free(line); //release memory allocated to line pointer
+
+    free_jobs(); // free memory allocated to jobs array
     printf("bye\n");
     exit(0);
 }
@@ -35,6 +39,7 @@ char* readline(const char *prompt)
     pid_t done;
     while ((done = waitpid(-1, &status, WNOHANG)) > 0) {
         printf("[done] pid %d\n", done);
+        remove_job(done); // remove the completed job from the job list
     }
 
     printf("%s %s %s", KMAG, prompt, KRESET);

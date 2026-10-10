@@ -3,6 +3,8 @@
 
 #include "shell.h"
 #include "executor.h"
+#include "jobs.h"
+#include "utils.h"
 
 //example pipes https://www.redhat.com/sysadmin/pipes-command-line-linux#:~:text=One%20of%20the%20most%20powerful,of%20output%20or%20file%20descriptors.
 
@@ -12,6 +14,8 @@
  * @return
  */
 int main(void) {
+    init_jobs(); // initialize the job list
+
     while (1) {
         struct cmdline *l;
         char *line=0;
