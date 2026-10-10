@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/fcntl.h>
+#include <sys/wait.h>
 
 #include "parser.h"
 
@@ -14,20 +15,23 @@
  * @param bg
  * @return
  */
-int execute_command(char* cmd, char** args, int in, int out, int bg) {
+int execute_command(char* cmd, char** args, int bg) {
     // TODO: Implement the function to execute a command with given arguments, input/output redirection, and background execution.
     pid_t pid = fork();
     
     if (pid < 0) {
-        // failed fork creation
+        perror("fork failed");
+        return EXIT_FAILURE;
     }
     else if (pid == 0) { // child
         execvp(cmd, args);
         perror(cmd); // only reached if execvp fails
         exit(EXIT_FAILURE);
     } else {
-        wait(NULL);
-        // do nothing
+        if (bg == 0) waitpid(pid, NULL, 0); // wait(NULL) reaps the previous zombie child process, but we want to wait for 
+                                            // the specific child process we just created. Using waitpid with the child's pid 
+                                            // ensures that we wait for the correct process.
+        else printf("child background process pid: %d\n", (int) pid);
     }
     return EXIT_SUCCESS;
 }
@@ -51,8 +55,9 @@ int execute(struct cmdline *l){
         for (j=0; cmd[j]!=0; j++) {
             printf("'%s' ", cmd[j]);
         }
-        execute_command(cmd[0], cmd, 0, 0, 0);
         printf("\n");
+        fflush(stdout); 
+        execute_command(cmd[0], cmd, l->bg);
     }
     return EXIT_SUCCESS;
 }

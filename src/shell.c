@@ -30,6 +30,13 @@ char* readline(const char *prompt)
     size_t buf_len = 16;
     char *buf = xmalloc(buf_len * sizeof(char));
 
+    // implement later using SIGCHLD signal to reap background processes
+    int status; // placeholder for now
+    pid_t done;
+    while ((done = waitpid(-1, &status, WNOHANG)) > 0) {
+        printf("[done] pid %d\n", done);
+    }
+
     printf("%s %s %s", KMAG, prompt, KRESET);
     if (fgets(buf, buf_len, stdin) == NULL) {
         free(buf);
@@ -38,13 +45,13 @@ char* readline(const char *prompt)
 
     do {
         size_t l = strlen(buf);
-        if ((l > 0) && (buf[l-1] == '\n')) {
+        if ((l > 0) && (buf[l-1] == '\n')) { // if the buffer is large enough to contain the entire line, return it
             l--;
             buf[l] = 0;
             return buf;
         }
         if (buf_len >= (INT_MAX / 2)) memory_error();
-        buf_len *= 2;
+        buf_len *= 2; // IMPORTANT! if the buffer is not large enough to contain the entire line, double its size and read more input
         buf = xrealloc(buf, buf_len * sizeof(char));
         if (fgets(buf + l, buf_len - l, stdin) == NULL) return buf;
     } while (1);
