@@ -3,8 +3,10 @@
 #include <unistd.h>
 #include <sys/fcntl.h>
 #include <sys/wait.h>
+#include <string.h>
 
 #include "parser.h"
+#include "jobs.h"
 
 /**
  * @brief Executes a single, simple command in another process
@@ -16,7 +18,11 @@
  * @return
  */
 int execute_command(char* cmd, char** args, int bg) {
-    // TODO: Implement the function to execute a command with given arguments, input/output redirection, and background execution.
+
+    if (strcmp(args[0], "jobs") == 0) { 
+        list_jobs(); 
+        return EXIT_SUCCESS; 
+    }
     pid_t pid = fork();
     
     if (pid < 0) {
@@ -27,11 +33,15 @@ int execute_command(char* cmd, char** args, int bg) {
         execvp(cmd, args);
         perror(cmd); // only reached if execvp fails
         exit(EXIT_FAILURE);
-    } else {
-        if (bg == 0) waitpid(pid, NULL, 0); // wait(NULL) reaps the previous zombie child process, but we want to wait for 
-                                            // the specific child process we just created. Using waitpid with the child's pid 
-                                            // ensures that we wait for the correct process.
-        else printf("child background process pid: %d\n", (int) pid);
+    } else { // parent
+        if (bg == 0) {
+            waitpid(pid, NULL, 0);  // wait(NULL) reaps the previous zombie child process, but we want to wait for 
+                                    // the specific child process we just created. Using waitpid with the child's pid 
+                                    // ensures that we wait for the correct process.
+        } else {
+            printf("child background process pid: %d\n", (int) pid);
+            add_job(pid, cmd); // Add the background job to the job list
+        }
     }
     return EXIT_SUCCESS;
 }
@@ -42,7 +52,6 @@ int execute_command(char* cmd, char** args, int bg) {
  * @return 0 on success, or a non-zero value on error.
  */
 int execute(struct cmdline *l){
-    printf("TODO: Execute the command\n");
     int i,j;
     if (l->in) printf("in: %s\n", l->in);
     if (l->out) printf("out: %s\n", l->out);

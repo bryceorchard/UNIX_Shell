@@ -5,10 +5,10 @@
 #ifndef EXECUTOR_H
 #define EXECUTOR_H
 
-#endif //EXECUTOR_H
-
 #include "parser.h"
 
 int execute_command(char* cmd, char** args, int bg);
 
 int execute(struct cmdline *l);
+
+#endif //EXECUTOR_H

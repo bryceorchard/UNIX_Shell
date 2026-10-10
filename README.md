@@ -28,6 +28,7 @@ myshell> echo coen346
 coen346
 myshell> sleep 5 &     # background: the prompt returns immediately
 myshell> sleep 5       # foreground: blocks until it finishes
+myshell> jobs          # lists all currently running background processes
 ```
 
 ## Test
@@ -40,7 +41,7 @@ make test
 ```
 
 It covers line reading, command parsing (including the background `&` flag
-and misplaced-`&` errors), and foreground vs. background execution behavior.
+and misplaced-`&` errors), foreground vs. background execution behavior, and the `jobs` command.
 
 ## Project structure
 
@@ -82,3 +83,19 @@ disclosed below.
 - **Claude chat URL:** [claude.ai](https://claude.ai/share/55c21943-0ed2-4061-b77b-2629ae1ed79a)
 - **Adaptation / verification:** AI-suggested code was reviewed and verified.
   The tests were compiled and run (15/15 passing) before inclusion. The generated README draft was heavily modified.
+
+### Bryce Orchard log (Issue #4 — jobs / background-process listing)
+
+- **Tool used:** Claude (Anthropic).
+- **Intent:**
+  - Conceptual discussion of data structures for tracking background jobs
+    (fixed job table vs. linked list vs. tree), job-id assignment and reuse,
+    and where the add / remove / list logic belongs in the executor.
+  - Design discussion of a `SIGCHLD`-based reaping approach — async-signal
+    safety, blocking `SIGCHLD` around `fork()`/`add_job`, and `EINTR` /
+    `SA_RESTART` handling.
+  - Generating the unit tests in `tests/test_main.c` for the `jobs` built-in
+    / background-process listing feature.
+- **Claude chat URL:** [claude.ai](https://claude.ai/share/a4fb6e61-c6d1-4fb6-a732-b8f103552182)
+- **Adaptation / verification:** AI-suggested tests were reviewed and run via
+  `make test` (all assertions passing) before inclusion. None of the non-test AI suggested code was copied, and was only used as inspiration.
