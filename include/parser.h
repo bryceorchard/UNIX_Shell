@@ -4,7 +4,6 @@
 
 #ifndef PARSER_H
 #define PARSER_H
-#endif //PARSER_H
 
 struct cmdline *parsecmd(char **pline) ;
 
@@ -17,6 +16,8 @@ struct cmdline {
     int   bg;       /* If set the command must run in background */
     char ***seq;	/* See comment below */
 };
+
+#endif //PARSER_H
 
 /* Field seq of struct cmdline :
 A command line is a sequence of commands whose output is linked to the input
