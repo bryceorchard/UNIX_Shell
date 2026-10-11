@@ -2,7 +2,7 @@
 #define JOBS_H
 
 #include <unistd.h>
-#include <utils.h> // don't know how this picks up the <sys/time.h> library but it does, I think
+#include <sys/time.h> // for struct timeval
 
 #define MAX_JOBS 10
 
