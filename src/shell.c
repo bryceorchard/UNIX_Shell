@@ -34,14 +34,6 @@ char* readline(const char *prompt)
     size_t buf_len = 16;
     char *buf = xmalloc(buf_len * sizeof(char));
 
-    // implement later using SIGCHLD signal to reap background processes
-    int status; // placeholder for now
-    pid_t done;
-    while ((done = waitpid(-1, &status, WNOHANG)) > 0) {
-        printf("[done] pid %d\n", done);
-        remove_job(done); // remove the completed job from the job list
-    }
-
     printf("%s %s %s", KMAG, prompt, KRESET);
     if (fgets(buf, buf_len, stdin) == NULL) {
         free(buf);
