@@ -27,6 +27,9 @@ You'll get a `myshell>` prompt. Type commands as in a normal shell; type
 myshell> echo coen346
 coen346
 myshell> sleep 5 &     # background: the prompt returns immediately
+
+# Background task runtime is immediately printed upon exit.
+
 myshell> sleep 5       # foreground: blocks until it finishes
 myshell> jobs          # lists all currently running background processes
 ```
@@ -99,3 +102,20 @@ disclosed below.
 - **Claude chat URL:** [claude.ai](https://claude.ai/share/a4fb6e61-c6d1-4fb6-a732-b8f103552182)
 - **Adaptation / verification:** AI-suggested tests were reviewed and run via
   `make test` (all assertions passing) before inclusion. None of the non-test AI suggested code was copied, and was only used as inspiration.
+
+### Bryce Orchard log (Issue #8 — process computation time)
+
+- **Tool used:** Claude (Anthropic).
+- **Intent:**
+  - Conceptual discussion of the computation-time feature — why
+    async-signal-safety still matters even though `SIGCHLD` is blocked during
+    the handler, draining coalesced signals with `waitpid(-1, WNOHANG)`,
+    `SA_RESTART`, and whether `fflush(stdout)` before `fork()` is needed.
+  - Review of the existing implementation (the `SIGCHLD` handler plus the
+    `add_job`/`remove_job` start-time and elapsed-time logic).
+  - Generating the unit tests in `tests/test_main.c` for the process
+    computation time (Issue #8) feature.
+- **Claude chat URL:** [claude.ai](https://claude.ai/share/4137fd13-b14d-4301-b6cc-4b6674c9c00f)
+- **Adaptation / verification:** AI-suggested tests were reviewed and run via
+  `make test` (all assertions passing) before inclusion. None of the non-test
+  AI-suggested code was copied.
