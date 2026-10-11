@@ -4,6 +4,7 @@
 #include <sys/fcntl.h>
 #include <sys/wait.h>
 #include <string.h>
+#include <signal.h>
 
 #include "parser.h"
 #include "jobs.h"
@@ -19,10 +20,19 @@
  */
 int execute_command(char* cmd, char** args, int bg) {
 
+    sigset_t mask, prev;
+    sigemptyset(&mask); 
+    sigaddset(&mask, SIGCHLD);
+
     if (strcmp(args[0], "jobs") == 0) { 
+        sigprocmask(SIG_BLOCK, &mask, &prev); // Block SIGCHLD to prevent race conditions when adding jobs
         list_jobs(); 
+        sigprocmask(SIG_SETMASK, &prev, NULL); // Restore previous signal mask
         return EXIT_SUCCESS; 
     }
+
+    sigprocmask(SIG_BLOCK, &mask, &prev);
+
     pid_t pid = fork();
     
     if (pid < 0) {
@@ -35,12 +45,12 @@ int execute_command(char* cmd, char** args, int bg) {
         exit(EXIT_FAILURE);
     } else { // parent
         if (bg == 0) {
-            waitpid(pid, NULL, 0);  // wait(NULL) reaps the previous zombie child process, but we want to wait for 
-                                    // the specific child process we just created. Using waitpid with the child's pid 
-                                    // ensures that we wait for the correct process.
+            sigprocmask(SIG_SETMASK, &prev, NULL); // Restore previous signal mask
+            waitpid(pid, NULL, 0);
         } else {
             printf("child background process pid: %d\n", (int) pid);
             add_job(pid, cmd); // Add the background job to the job list
+            sigprocmask(SIG_SETMASK, &prev, NULL);
         }
     }
     return EXIT_SUCCESS;
@@ -65,7 +75,7 @@ int execute(struct cmdline *l){
             printf("'%s' ", cmd[j]);
         }
         printf("\n");
-        fflush(stdout); 
+        // fflush(stdout); // Not needed since "\n" already flushes the buffer, but it likely will be needed for writing to files.
         execute_command(cmd[0], cmd, l->bg);
     }
     return EXIT_SUCCESS;

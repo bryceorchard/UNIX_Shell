@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <signal.h>
 
 #include "shell.h"
 #include "executor.h"
@@ -15,6 +16,14 @@
  */
 int main(void) {
     init_jobs(); // initialize the job list
+
+    // Set up the SIGCHLD handler to reap background processes
+    struct sigaction sa;
+    sa.sa_handler = sigchld_handler;
+    sigemptyset(&sa.sa_mask);
+    sigaddset(&sa.sa_mask, SIGCHLD);          // block SIGCHLD while handler runs
+    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;  // restart fgets and waitpid; ignore stop/cont
+    sigaction(SIGCHLD, &sa, NULL);
 
     while (1) {
         struct cmdline *l;
