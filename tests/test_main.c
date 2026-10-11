@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/time.h>
+#include <signal.h>
 #include "shell.h"
 #include "executor.h"
 #include "jobs.h"
@@ -315,6 +316,196 @@ void test_background_job_is_registered() {
 //     free(cmd.seq);
 // }
 
+/* ================================================================
+ * Process computation time (SIGCHLD -> elapsed-time reporting)
+ * ================================================================ */
+
+/* Small helper: capture everything remove_job/list_jobs/the handler print
+ * to stdout into `buf`, so we can assert on the completion message. Because
+ * the SIGCHLD handler runs on this same thread (it interrupts us during the
+ * usleep loop), writing to the redirected stdout from it is not a data race
+ * here - it is ordinary same-thread I/O. */
+
+/**
+ * @brief Removing a tracked job emits the completion message: its PID, the
+ *        "completed in ... seconds" wording, and the blue colour the spec
+ *        asks for.
+ */
+void test_completion_message_format() {
+    free_jobs();
+    add_job(8080, "sleep 1");
+
+    char buf[1024];
+    memset(buf, 0, sizeof(buf));
+    FILE *orig = stdout;
+    FILE *cap = fmemopen(buf, sizeof(buf), "w");
+    TEST_ASSERT(cap != NULL);
+    stdout = cap;
+    remove_job(8080);
+    fflush(cap);
+    stdout = orig;
+    fclose(cap);
+
+    TEST_ASSERT(strstr(buf, "8080")         != NULL); // the pid
+    TEST_ASSERT(strstr(buf, "completed in") != NULL); // the wording
+    TEST_ASSERT(strstr(buf, "seconds")      != NULL); // the unit
+    TEST_ASSERT(strstr(buf, "\x1b[34m")     != NULL); // printed in blue
+
+    free_jobs();
+}
+
+/**
+ * @brief The reported time reflects real elapsed wall-clock time, measured
+ *        from add_job's start_time to remove_job: a job left alive ~0.3s
+ *        should report at least that.
+ */
+void test_completion_time_tracks_elapsed() {
+    free_jobs();
+    add_job(8081, "work");
+    usleep(300000); // 0.3 s
+
+    char buf[1024];
+    memset(buf, 0, sizeof(buf));
+    FILE *orig = stdout;
+    FILE *cap = fmemopen(buf, sizeof(buf), "w");
+    TEST_ASSERT(cap != NULL);
+    stdout = cap;
+    remove_job(8081);
+    fflush(cap);
+    stdout = orig;
+    fclose(cap);
+
+    char *p = strstr(buf, "completed in ");
+    TEST_ASSERT(p != NULL);
+    double secs = -1.0;
+    TEST_ASSERT(sscanf(p, "completed in %lf", &secs) == 1);
+    TEST_ASSERT(secs >= 0.25); // at least ~0.3s (generous lower bound)
+    TEST_ASSERT(secs <  2.0);  // and not a garbage value
+
+    free_jobs();
+}
+
+/**
+ * @brief A job removed immediately reports a near-zero time - a sanity check
+ *        that start_time is set in add_job rather than left uninitialised.
+ */
+void test_completion_time_near_zero_when_instant() {
+    free_jobs();
+    add_job(8082, "quick");
+
+    char buf[1024];
+    memset(buf, 0, sizeof(buf));
+    FILE *orig = stdout;
+    FILE *cap = fmemopen(buf, sizeof(buf), "w");
+    TEST_ASSERT(cap != NULL);
+    stdout = cap;
+    remove_job(8082);
+    fflush(cap);
+    stdout = orig;
+    fclose(cap);
+
+    char *p = strstr(buf, "completed in ");
+    TEST_ASSERT(p != NULL);
+    double secs = -1.0;
+    TEST_ASSERT(sscanf(p, "completed in %lf", &secs) == 1);
+    TEST_ASSERT(secs >= 0.0);
+    TEST_ASSERT(secs <  0.2); // effectively instant
+
+    free_jobs();
+}
+
+/**
+ * @brief End-to-end: with the real SIGCHLD handler installed, a background
+ *        job that finishes is reaped by the handler, which removes it from
+ *        the table and prints its computation time - the main code never
+ *        calls wait() itself.
+ */
+void test_sigchld_handler_reports_background_completion() {
+    free_jobs();
+
+    struct sigaction sa;
+    sa.sa_handler = sigchld_handler;
+    sigemptyset(&sa.sa_mask);
+    sigaddset(&sa.sa_mask, SIGCHLD);
+    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+    TEST_ASSERT(sigaction(SIGCHLD, &sa, NULL) == 0);
+
+    char buf[1024];
+    memset(buf, 0, sizeof(buf));
+    FILE *orig = stdout;
+    FILE *cap = fmemopen(buf, sizeof(buf), "w");
+    TEST_ASSERT(cap != NULL);
+    stdout = cap;
+
+    char *args[] = {"true", NULL};
+    execute_command("true", args, 1); // bg: add_job(pid); child exits at once
+
+    // Let the child die and the handler run. Do NOT wait() here - that would
+    // steal the child from the handler we are testing.
+    for (int i = 0; i < 100; i++) usleep(10000); // up to ~1 s
+
+    fflush(cap);
+    stdout = orig;
+    fclose(cap);
+
+    // The handler printed the completion message...
+    TEST_ASSERT(strstr(buf, "completed in") != NULL);
+
+    // ...and cleared the slot: the table is empty, so MAX_JOBS adds all fit.
+    int added = 0;
+    for (int i = 0; i < MAX_JOBS; i++)
+        if (add_job(9000 + i, "probe") == 0) added++;
+    TEST_ASSERT(added == MAX_JOBS); // 0 slots were still occupied
+
+    free_jobs();
+    signal(SIGCHLD, SIG_DFL); // restore default for later tests
+}
+
+/**
+ * @brief The handler drains ALL finished children on a single delivery:
+ *        SIGCHLD is not queued, so several jobs ending at once must still be
+ *        reaped via the waitpid(-1, WNOHANG) loop. Launch three, confirm
+ *        none linger in the table.
+ */
+void test_sigchld_handler_reaps_multiple() {
+    free_jobs();
+
+    struct sigaction sa;
+    sa.sa_handler = sigchld_handler;
+    sigemptyset(&sa.sa_mask);
+    sigaddset(&sa.sa_mask, SIGCHLD);
+    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+    TEST_ASSERT(sigaction(SIGCHLD, &sa, NULL) == 0);
+
+    // Redirect stdout to swallow the completion messages (the handler still
+    // runs; we just do not want its output interleaved with the test log).
+    char buf[2048];
+    memset(buf, 0, sizeof(buf));
+    FILE *orig = stdout;
+    FILE *cap = fmemopen(buf, sizeof(buf), "w");
+    TEST_ASSERT(cap != NULL);
+    stdout = cap;
+
+    char *args[] = {"true", NULL};
+    execute_command("true", args, 1);
+    execute_command("true", args, 1);
+    execute_command("true", args, 1);
+
+    for (int i = 0; i < 100; i++) usleep(10000); // up to ~1 s
+
+    fflush(cap);
+    stdout = orig;
+    fclose(cap);
+
+    int added = 0;
+    for (int i = 0; i < MAX_JOBS; i++)
+        if (add_job(9100 + i, "probe") == 0) added++;
+    TEST_ASSERT(added == MAX_JOBS); // all three reaped => table empty
+
+    free_jobs();
+    signal(SIGCHLD, SIG_DFL);
+}
+
 /**
  * @brief Runs all the tests.
  */
@@ -337,6 +528,13 @@ int main() {
     test_job_slot_reuse_after_remove();
     test_jobs_listing_output();
     test_background_job_is_registered();
+
+    // process computation time (SIGCHLD elapsed-time reporting)
+    test_completion_message_format();
+    test_completion_time_tracks_elapsed();
+    test_completion_time_near_zero_when_instant();
+    test_sigchld_handler_reports_background_completion();
+    test_sigchld_handler_reaps_multiple();
 
     // test_pipe_execution();
 
