@@ -4,8 +4,10 @@
 
 #ifndef UTILS_H
 #define UTILS_H
+
 #include <stddef.h>
 
+void sigchld_handler(int sig);
 void memory_error(void);
 void *xmalloc(size_t size);
 void *xrealloc(void *ptr, size_t size);
