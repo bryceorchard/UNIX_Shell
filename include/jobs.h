@@ -2,12 +2,14 @@
 #define JOBS_H
 
 #include <unistd.h>
+#include <utils.h> // don't know how this picks up the <sys/time.h> library but it does, I think
 
 #define MAX_JOBS 10
 
 typedef struct {
     pid_t pid;
     int   active;     /* 0 = free slot */
+    struct timeval start_time; /* for process computation time */
     char *cmd;        /* for the listing text */
 } job_t;
 
