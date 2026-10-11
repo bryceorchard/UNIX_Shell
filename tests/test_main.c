@@ -8,6 +8,7 @@
 #include "shell.h"
 #include "executor.h"
 #include "jobs.h"
+#include "utils.h"
 
 // ====================================================================
 // A very simple testing framework with a few helper macros.
