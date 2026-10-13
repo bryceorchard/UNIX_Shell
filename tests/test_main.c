@@ -131,7 +131,7 @@ void test_foreground_runs_command() {
     unlink(marker); // start clean
 
     char *args[] = {"sh", "-c", "echo ok > /tmp/coen346_fg_marker", NULL};
-    execute_command("sh", args, 0); // foreground
+    execute_command("sh", args, STDIN_FILENO, STDOUT_FILENO, 0); // foreground
 
     TEST_ASSERT(access(marker, F_OK) == 0);
     unlink(marker);
@@ -146,7 +146,7 @@ void test_foreground_blocks() {
 
     struct timeval start;
     gettimeofday(&start, NULL);
-    execute_command("sleep", args, 0); // foreground
+    execute_command("sleep", args, STDIN_FILENO, STDOUT_FILENO, 0); // foreground
     double dt = elapsed_since(start);
 
     TEST_ASSERT(dt >= 0.9); // we waited out the sleep
@@ -161,7 +161,7 @@ void test_background_execution() {
 
     struct timeval start;
     gettimeofday(&start, NULL);
-    execute_command("sleep", args, 1); // background
+    execute_command("sleep", args, STDIN_FILENO, STDOUT_FILENO, 1); // background
     double dt = elapsed_since(start);
 
     TEST_ASSERT(dt < 0.5); // returned without waiting for the sleep
@@ -264,7 +264,7 @@ void test_background_job_is_registered() {
     free_jobs();
 
     char *args[] = {"true", NULL};
-    execute_command("true", args, 1); // background -> should add_job(pid, ...)
+    execute_command("true", args, STDIN_FILENO, STDOUT_FILENO, 1); // background -> should add_job(pid, ...)
 
     pid_t reaped = waitpid(-1, NULL, 0); // reap the child, obtain its pid
     TEST_ASSERT(reaped > 0);
@@ -439,7 +439,7 @@ void test_sigchld_handler_reports_background_completion() {
     stdout = cap;
 
     char *args[] = {"true", NULL};
-    execute_command("true", args, 1); // bg: add_job(pid); child exits at once
+    execute_command("true", args, STDIN_FILENO, STDOUT_FILENO, 1); // bg: add_job(pid); child exits at once
 
     // Let the child die and the handler run. Do NOT wait() here - that would
     // steal the child from the handler we are testing.
@@ -488,9 +488,9 @@ void test_sigchld_handler_reaps_multiple() {
     stdout = cap;
 
     char *args[] = {"true", NULL};
-    execute_command("true", args, 1);
-    execute_command("true", args, 1);
-    execute_command("true", args, 1);
+    execute_command("true", args, STDIN_FILENO, STDOUT_FILENO, 1);
+    execute_command("true", args, STDIN_FILENO, STDOUT_FILENO, 1);
+    execute_command("true", args, STDIN_FILENO, STDOUT_FILENO, 1);
 
     for (int i = 0; i < 100; i++) usleep(10000); // up to ~1 s
 

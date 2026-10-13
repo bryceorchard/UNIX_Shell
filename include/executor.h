@@ -7,7 +7,7 @@
 
 #include "parser.h"
 
-int execute_command(char* cmd, char** args, int bg);
+int execute_command(char* cmd, char** args, int in, int out, int bg);
 
 int execute(struct cmdline *l);
 

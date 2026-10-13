@@ -18,7 +18,7 @@
  * @param bg
  * @return
  */
-int execute_command(char* cmd, char** args, int bg) {
+int execute_command(char* cmd, char** args, int in, int out, int bg) {
 
     sigset_t mask, prev;
     sigemptyset(&mask); 
@@ -40,6 +40,14 @@ int execute_command(char* cmd, char** args, int bg) {
         return EXIT_FAILURE;
     }
     else if (pid == 0) { // child
+        if (in != STDIN_FILENO) {
+            dup2(in, STDIN_FILENO);
+            close(in);
+        }
+        if (out != STDOUT_FILENO) {
+            dup2(out, STDOUT_FILENO);
+            close(out);
+        }
         execvp(cmd, args);
         perror(cmd); // only reached if execvp fails
         exit(EXIT_FAILURE);
@@ -76,7 +84,7 @@ int execute(struct cmdline *l){
         }
         printf("\n");
         // fflush(stdout); // Not needed since "\n" already flushes the buffer, but it likely will be needed for writing to files.
-        execute_command(cmd[0], cmd, l->bg);
+        execute_command(cmd[0], cmd, STDIN_FILENO, STDOUT_FILENO, l->bg);
     }
     return EXIT_SUCCESS;
 }
