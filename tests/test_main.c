@@ -279,45 +279,6 @@ void test_background_job_is_registered() {
  * ================================================================ */
 
 /**
- * @brief Tests command execution with a simple pipe.
- */
-// void test_pipe_execution() {
-//     // This requires a way to capture the output of the final command.
-//     // We'll redirect the output to a file and check the file's contents.
-
-//     // Create a temporary file for output redirection.
-//     char *temp_file = "test_output.txt";
-
-//     struct cmdline cmd;
-//     cmd.in = NULL;
-//     cmd.out = temp_file;
-//     cmd.bg = 0;
-
-//     char *cmd1_args[] = {"echo", "a\nb\nc\n", NULL};
-//     char *cmd2_args[] = {"grep", "b", NULL};
-
-//     cmd.seq = (char***)malloc(sizeof(char**) * 3);
-//     cmd.seq[0] = cmd1_args;
-//     cmd.seq[1] = cmd2_args;
-//     cmd.seq[2] = NULL;
-
-//     int result = execute(&cmd);
-//     TEST_ASSERT(result == EXIT_SUCCESS);
-
-//     // Read the content of the temporary file.
-//     FILE *f = fopen(temp_file, "r");
-//     TEST_ASSERT(f != NULL);
-
-//     char buffer[256];
-//     fgets(buffer, sizeof(buffer), f);
-//     TEST_ASSERT_EQUAL_STRING("b\n", buffer);
-
-//     fclose(f);
-//     remove(temp_file); // Clean up the temporary file
-//     free(cmd.seq);
-// }
-
-/**
  * @brief Runs a command line through the shell's parser and executor and
  *        captures what the commands write to stdout.
  * @param line   Command line to run, e.g. "echo hello | cat".
@@ -363,6 +324,18 @@ static void capture_output(const char *line, char *buffer, size_t size) {
 
     close(tmp_fd);
     unlink(path);
+}
+
+/**
+ * @brief Tests command execution with a simple pipe. Added by Paula Lago,
+ *        adapted to use capture_output() instead of redirecting to a file.
+ */
+void test_pipe_execution() {
+    char output[256];
+
+    // printf expands the \n escapes itself, so grep receives three lines.
+    capture_output("printf 'a\\nb\\nc\\n' | grep b", output, sizeof(output));
+    TEST_ASSERT_EQUAL_STRING("b\n", output);
 }
 
 void test_simple_pipes() {
@@ -644,7 +617,8 @@ int main() {
     // simple pipes (x | y)
     test_simple_pipes();
 
-    // test_pipe_execution();
+    // Added by Paula Lago
+    test_pipe_execution();
 
     printf("\nRan %d tests, %d failed.\n", tests_run, tests_failed);
     if (tests_failed == 0) {
