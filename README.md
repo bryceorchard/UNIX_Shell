@@ -119,3 +119,15 @@ disclosed below.
 - **Adaptation / verification:** AI-suggested tests were reviewed and run via
   `make test` (all assertions passing) before inclusion. None of the non-test
   AI-suggested code was copied.
+
+### Ismail Cherfaoui log (Issue #6 - simple pipe)
+
+- **Tool used:** Claude (Anthropic).
+- **Intent:**
+  - Understanding the assignment, the skeleton (`struct cmdline`, `execute`) and Bryce's implementation of `execute_command`.
+  - Conceptual explanation of file descriptors and the different system calls used for pipes (`pipe()`, `fork()`, `dup()`/`dup2()`, `close()`).
+  - Explanation of the order in which the shell and each child call `pipe()`, `fork()`, `dup2()`, `close()` for a pipeline.
+  - Discussion of how pipes should be created in the loop and how to pass `in`/`out` file descriptors to `execute_command`.
+  - Review of my implementation of pipes in `executor.c` for possible bugs or overlooked cases.
+- **Claude chat URL:** [claude.ai](https://claude.ai/share/cfb64113-afb3-4ab3-8c61-c06254025a16)
+- **Adaptation / verification:** All code was written by me. AI was used for explanations, design discussion and review of my implementation. Tested manually against the system shell (`ls | wc -l`, `cat resources/contacts.txt | sort`, `cat README.md | grep x | more`, `fakecmd | wc -l`, `ls | fakecmd`), and `make test` passes. Review findings (large-output deadlock, stray pipe read end) will be addressed as a part of the multiple pipe implementation (Issue #7). 
