@@ -131,7 +131,7 @@ void test_foreground_runs_command() {
     unlink(marker); // start clean
 
     char *args[] = {"sh", "-c", "echo ok > /tmp/coen346_fg_marker", NULL};
-    execute_command("sh", args, 0); // foreground
+    execute_command("sh", args, STDIN_FILENO, STDOUT_FILENO, 0); // foreground
 
     TEST_ASSERT(access(marker, F_OK) == 0);
     unlink(marker);
@@ -146,7 +146,7 @@ void test_foreground_blocks() {
 
     struct timeval start;
     gettimeofday(&start, NULL);
-    execute_command("sleep", args, 0); // foreground
+    execute_command("sleep", args, STDIN_FILENO, STDOUT_FILENO, 0); // foreground
     double dt = elapsed_since(start);
 
     TEST_ASSERT(dt >= 0.9); // we waited out the sleep
@@ -161,7 +161,7 @@ void test_background_execution() {
 
     struct timeval start;
     gettimeofday(&start, NULL);
-    execute_command("sleep", args, 1); // background
+    execute_command("sleep", args, STDIN_FILENO, STDOUT_FILENO, 1); // background
     double dt = elapsed_since(start);
 
     TEST_ASSERT(dt < 0.5); // returned without waiting for the sleep
@@ -264,7 +264,7 @@ void test_background_job_is_registered() {
     free_jobs();
 
     char *args[] = {"true", NULL};
-    execute_command("true", args, 1); // background -> should add_job(pid, ...)
+    execute_command("true", args, STDIN_FILENO, STDOUT_FILENO, 1); // background -> should add_job(pid, ...)
 
     pid_t reaped = waitpid(-1, NULL, 0); // reap the child, obtain its pid
     TEST_ASSERT(reaped > 0);
@@ -316,6 +316,110 @@ void test_background_job_is_registered() {
 //     remove(temp_file); // Clean up the temporary file
 //     free(cmd.seq);
 // }
+
+/**
+ * @brief Runs a command line through the shell's parser and executor and
+ *        captures what the commands write to stdout.
+ * @param line   Command line to run, e.g. "echo hello | cat".
+ * @param buffer Destination for the captured output (always NUL-terminated).
+ * @param size   Size of `buffer` in bytes.
+ */
+static void capture_output(const char *line, char *buffer, size_t size) {
+    buffer[0] = '\0';
+
+    // Temp file to receive the output. Forked commands inherit fd 1, so
+    // pointing fd 1 at this file captures everything the pipeline prints.
+    char path[] = "/tmp/coen346_pipe_XXXXXX";
+    int tmp_fd = mkstemp(path);
+    if (tmp_fd < 0) return;
+
+    // Save the real stdout, then redirect fd 1 to the temp file.
+    fflush(stdout);
+    int saved_fd = dup(STDOUT_FILENO);
+    dup2(tmp_fd, STDOUT_FILENO);
+
+    // execute() prints "seq[i]: ..." debug lines through the stdout FILE.
+    // Point that FILE at /dev/null so only the commands' output is captured.
+    FILE *orig = stdout;
+    stdout = fopen("/dev/null", "w");
+
+    // parsecmd() frees the line it is given, so pass a heap copy.
+    char *copy = strdup(line);
+    struct cmdline *l = parsecmd(&copy);
+    if (l != NULL && l->err == NULL) {
+        execute(l); // foreground: returns once every command has been waited on
+    }
+
+    // Restore the real stdout (both the FILE and fd 1).
+    fclose(stdout);
+    stdout = orig;
+    dup2(saved_fd, STDOUT_FILENO);
+    close(saved_fd);
+
+    // Read the captured output back from the start of the file.
+    lseek(tmp_fd, 0, SEEK_SET);
+    ssize_t n = read(tmp_fd, buffer, size - 1);
+    buffer[n > 0 ? n : 0] = '\0';
+
+    close(tmp_fd);
+    unlink(path);
+}
+
+void test_simple_pipes() {
+    struct commands {
+        char *line;
+        char *expected;
+    };
+
+    struct commands test_cases[] = {
+        { .line = "echo hello | cat", .expected = "hello\n" },
+        { .line = "echo hello | grep h", .expected = "hello\n" },
+        { .line = "echo hello world | wc -w", .expected = "2\n" },
+        { .line = "echo hello world | wc -c", .expected = "12\n" },
+        { .line = "echo hello world | wc -l", .expected = "1\n" },
+        { .line = "echo abc | tr a-z A-Z", .expected = "ABC\n" },
+        { .line = "echo \"This is a test stream\" | sed 's/stream/text/'", .expected = "This is a test text\n" },
+        // contacts.txt: no trailing newline, so wc -l counts 8 lines, not 9
+        { .line = "cat resources/contacts.txt | wc -l", .expected = "8\n" },
+        { .line = "cat resources/contacts.txt | sort", .expected = "Bob Jones\nColin Doe\nDana David\nJenny Case\nLeonard Schmidt\nLeslie Smith\nLinda Gray\nSusan Gee\nTerry Jones\n" },
+        { .line = "cat resources/contacts.txt | sort -k2", .expected = "Jenny Case\nDana David\nColin Doe\nSusan Gee\nLinda Gray\nBob Jones\nTerry Jones\nLeonard Schmidt\nLeslie Smith\n" },
+        { .line = "cat resources/contacts.txt | grep Jones", .expected = "Bob Jones\nTerry Jones\n" },
+        { .line = "cat resources/contacts.txt | head -n 3", .expected = "Bob Jones\nLeslie Smith\nDana David\n" },
+        // last line has no newline, so the output doesn't end with one either
+        { .line = "cat resources/contacts.txt | tail -n 2", .expected = "Colin Doe\nJenny Case" },
+        // '$2' is in single quotes, so the shell must pass it to awk untouched
+        { .line = "cat resources/contacts.txt | awk '{ print $2 }'", .expected = "Jones\nSmith\nDavid\nGee\nSchmidt\nGray\nJones\nDoe\nCase\n" },
+        // contents.txt: also no trailing newline
+        { .line = "cat resources/contents.txt | wc -l", .expected = "8\n" },
+        { .line = "cat resources/contents.txt | grep error", .expected = "This line contains an error.\nHere is another line with an error.\n" },
+        { .line = "cat resources/contents.txt | grep -i error", .expected = "This line contains an error.\nThis line contains a case sensitive ERROR\nAnd this one is just an Error.\nHere is another line with an error.\n" },
+        { .line = "cat resources/contents.txt | grep -ic warning", .expected = "3\n" },
+        // trailing space after "line." must be preserved
+        { .line = "cat resources/contents.txt | grep another", .expected = "This is another line. \nHere is another line with an error.\n" },
+        // cat fails (error goes to stderr, not captured), wc still prints 0
+        { .line = "cat resources/nope.txt | wc -l", .expected = "0\n" }
+    };
+
+    // Run every case, even after a failure, and report each result.
+    size_t count = sizeof(test_cases) / sizeof(test_cases[0]);
+    char output[1024];
+
+    for (size_t i = 0; i < count; i++) {
+        tests_run++;
+        capture_output(test_cases[i].line, output, sizeof(output));
+
+        if (strcmp(test_cases[i].expected, output + strspn(output, " \t")) == 0) {
+            printf(ANSI_COLOR_GREEN "PASS: %s - \"%s\"\n" ANSI_COLOR_RESET,
+                   __func__, test_cases[i].line);
+        } else {
+            tests_failed++;
+            printf(ANSI_COLOR_RED "FAIL: %s:%d - %s - \"%s\"\n" ANSI_COLOR_RESET,
+                   __FILE__, __LINE__, __func__, test_cases[i].line);
+            printf("  expected: \"%s\"\n  actual:   \"%s\"\n",
+                   test_cases[i].expected, output);
+        }
+    }
+}
 
 /* ================================================================
  * Process computation time (SIGCHLD -> elapsed-time reporting)
@@ -439,7 +543,7 @@ void test_sigchld_handler_reports_background_completion() {
     stdout = cap;
 
     char *args[] = {"true", NULL};
-    execute_command("true", args, 1); // bg: add_job(pid); child exits at once
+    execute_command("true", args, STDIN_FILENO, STDOUT_FILENO, 1); // bg: add_job(pid); child exits at once
 
     // Let the child die and the handler run. Do NOT wait() here - that would
     // steal the child from the handler we are testing.
@@ -488,9 +592,9 @@ void test_sigchld_handler_reaps_multiple() {
     stdout = cap;
 
     char *args[] = {"true", NULL};
-    execute_command("true", args, 1);
-    execute_command("true", args, 1);
-    execute_command("true", args, 1);
+    execute_command("true", args, STDIN_FILENO, STDOUT_FILENO, 1);
+    execute_command("true", args, STDIN_FILENO, STDOUT_FILENO, 1);
+    execute_command("true", args, STDIN_FILENO, STDOUT_FILENO, 1);
 
     for (int i = 0; i < 100; i++) usleep(10000); // up to ~1 s
 
@@ -536,6 +640,9 @@ int main() {
     test_completion_time_near_zero_when_instant();
     test_sigchld_handler_reports_background_completion();
     test_sigchld_handler_reaps_multiple();
+
+    // simple pipes (x | y)
+    test_simple_pipes();
 
     // test_pipe_execution();
 

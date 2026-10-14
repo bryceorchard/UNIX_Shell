@@ -32,6 +32,7 @@ myshell> sleep 5 &     # background: the prompt returns immediately
 
 myshell> sleep 5       # foreground: blocks until it finishes
 myshell> jobs          # lists all currently running background processes
+myshell> cat resources/contacts.txt | sort    # pipe: output of cat becomes input of sort
 ```
 
 ## Test
@@ -44,7 +45,8 @@ make test
 ```
 
 It covers line reading, command parsing (including the background `&` flag
-and misplaced-`&` errors), foreground vs. background execution behavior, and the `jobs` command.
+and misplaced-`&` errors), foreground vs. background execution behavior, the `jobs` command,
+and simple pipes (`cmd1 | cmd2`).
 
 ## Project structure
 
@@ -119,3 +121,16 @@ disclosed below.
 - **Adaptation / verification:** AI-suggested tests were reviewed and run via
   `make test` (all assertions passing) before inclusion. None of the non-test
   AI-suggested code was copied.
+
+### Ismail Cherfaoui log (Issue #6 - simple pipe)
+
+- **Tool used:** Claude (Anthropic).
+- **Intent:**
+  - Understanding the assignment, the skeleton (`struct cmdline`, `execute`) and Bryce's implementation of `execute_command`.
+  - Conceptual explanation of file descriptors and the different system calls used for pipes (`pipe()`, `fork()`, `dup()`/`dup2()`, `close()`).
+  - Explanation of the order in which the shell and each child call `pipe()`, `fork()`, `dup2()`, `close()` for a pipeline.
+  - Discussion of how pipes should be created in the loop and how to pass `in`/`out` file descriptors to `execute_command`.
+  - Review of my implementation of pipes in `executor.c` for possible bugs or overlooked cases.
+  - Generating the pipe unit tests in `tests/test_main.c`: suggesting test commands with expected outputs, and writing the `capture_output` helper function and test loop from my struct and array draft.
+- **Claude chat URLs:** [Pipe implementation](https://claude.ai/share/cfb64113-afb3-4ab3-8c61-c06254025a16), [Pipe tests](https://claude.ai/share/c678a2cb-1215-4268-8b2d-ae00b3b12384)
+- **Adaptation / verification:** The pipe implementation (in `executor.c`) was fully written by myself; AI was used for explanations, design discussion and review of my implementation. The pipe testing helper function, test loop and most test cases were AI-generated from my struct and array draft, then reviewed line by line and adjusted. Tested manually against the system shell and `make test` passes (83/83). Review findings from Pipe implementation chat (large-output deadlock, stray pipe read end) will be addressed as a part of the multiple pipe implementation (Issue #7). 

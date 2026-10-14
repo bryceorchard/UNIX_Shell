@@ -18,7 +18,7 @@
  * @param bg
  * @return
  */
-int execute_command(char* cmd, char** args, int bg) {
+int execute_command(char* cmd, char** args, int in, int out, int bg) {
 
     sigset_t mask, prev;
     sigemptyset(&mask); 
@@ -40,6 +40,14 @@ int execute_command(char* cmd, char** args, int bg) {
         return EXIT_FAILURE;
     }
     else if (pid == 0) { // child
+        if (in != STDIN_FILENO) {
+            dup2(in, STDIN_FILENO);
+            close(in);
+        }
+        if (out != STDOUT_FILENO) {
+            dup2(out, STDOUT_FILENO);
+            close(out);
+        }
         execvp(cmd, args);
         perror(cmd); // only reached if execvp fails
         exit(EXIT_FAILURE);
@@ -63,6 +71,7 @@ int execute_command(char* cmd, char** args, int bg) {
  */
 int execute(struct cmdline *l){
     int i,j;
+    int cmd_in = STDIN_FILENO;
     if (l->in) printf("in: %s\n", l->in);
     if (l->out) printf("out: %s\n", l->out);
     if (l->bg) printf("background (&)\n");
@@ -70,13 +79,28 @@ int execute(struct cmdline *l){
     /* Display each command of the pipe */
     for (i=0; l->seq[i]!=0; i++) {
         char **cmd = l->seq[i];
+        int cmd_out = STDOUT_FILENO;
+        int fds[2];
+        if (l->seq[i+1] != 0) {
+            if (pipe(fds) == -1) {
+                perror("Pipe failed");
+                return EXIT_FAILURE;
+            }
+            cmd_out = fds[1];
+        }
         printf("seq[%d]: ", i);
         for (j=0; cmd[j]!=0; j++) {
             printf("'%s' ", cmd[j]);
         }
         printf("\n");
         // fflush(stdout); // Not needed since "\n" already flushes the buffer, but it likely will be needed for writing to files.
-        execute_command(cmd[0], cmd, l->bg);
+        execute_command(cmd[0], cmd, cmd_in, cmd_out, l->bg);
+        if (cmd_in != STDIN_FILENO) close(cmd_in);
+        if (cmd_out != STDOUT_FILENO) close(cmd_out);
+        // Check for a next command
+        if (l->seq[i+1] != 0) {
+            cmd_in = fds[0];
+        }
     }
     return EXIT_SUCCESS;
 }
