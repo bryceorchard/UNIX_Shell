@@ -32,6 +32,7 @@ myshell> sleep 5 &     # background: the prompt returns immediately
 
 myshell> sleep 5       # foreground: blocks until it finishes
 myshell> jobs          # lists all currently running background processes
+myshell> cat resources/contacts.txt | sort    # pipe: output of cat becomes input of sort
 ```
 
 ## Test
@@ -44,7 +45,8 @@ make test
 ```
 
 It covers line reading, command parsing (including the background `&` flag
-and misplaced-`&` errors), foreground vs. background execution behavior, and the `jobs` command.
+and misplaced-`&` errors), foreground vs. background execution behavior, the `jobs` command,
+and simple pipes (`cmd1 | cmd2`).
 
 ## Project structure
 
