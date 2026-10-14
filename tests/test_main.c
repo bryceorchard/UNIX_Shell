@@ -21,17 +21,31 @@
 static int tests_run = 0;
 static int tests_failed = 0;
 
+// On failure, prints the location and the condition that failed, e.g.
+//   FAIL: tests/test_main.c:152 - test_foreground_blocks - dt >= 0.9
 #define TEST_ASSERT(condition) do { \
     tests_run++; \
     if (!(condition)) { \
-        printf(ANSI_COLOR_RED "FAIL: %s:%d - %s\n" ANSI_COLOR_RESET, __FILE__, __LINE__, __func__); \
+        printf(ANSI_COLOR_RED "FAIL: %s:%d - %s - %s\n" ANSI_COLOR_RESET, \
+               __FILE__, __LINE__, __func__, #condition); \
         tests_failed++; \
         return; \
     } \
 } while(0)
 
+// On failure, also prints both strings so the difference is visible.
 #define TEST_ASSERT_EQUAL_STRING(expected, actual) do { \
-    TEST_ASSERT(strcmp(expected, actual) == 0); \
+    const char *exp_ = (expected); \
+    const char *act_ = (actual); \
+    tests_run++; \
+    if (act_ == NULL || strcmp(exp_, act_) != 0) { \
+        printf(ANSI_COLOR_RED "FAIL: %s:%d - %s - %s == %s\n" ANSI_COLOR_RESET, \
+               __FILE__, __LINE__, __func__, #expected, #actual); \
+        printf("  expected: \"%s\"\n  actual:   \"%s\"\n", \
+               exp_, act_ != NULL ? act_ : "(null)"); \
+        tests_failed++; \
+        return; \
+    } \
 } while(0)
 
 // Small helper: seconds elapsed since `start`.
@@ -373,24 +387,13 @@ void test_simple_pipes() {
         { .line = "cat resources/nope.txt | wc -l", .expected = "0\n" }
     };
 
-    // Run every case, even after a failure, and report each result.
     size_t count = sizeof(test_cases) / sizeof(test_cases[0]);
     char output[1024];
 
     for (size_t i = 0; i < count; i++) {
-        tests_run++;
         capture_output(test_cases[i].line, output, sizeof(output));
-
-        if (strcmp(test_cases[i].expected, output + strspn(output, " \t")) == 0) {
-            printf(ANSI_COLOR_GREEN "PASS: %s - \"%s\"\n" ANSI_COLOR_RESET,
-                   __func__, test_cases[i].line);
-        } else {
-            tests_failed++;
-            printf(ANSI_COLOR_RED "FAIL: %s:%d - %s - \"%s\"\n" ANSI_COLOR_RESET,
-                   __FILE__, __LINE__, __func__, test_cases[i].line);
-            printf("  expected: \"%s\"\n  actual:   \"%s\"\n",
-                   test_cases[i].expected, output);
-        }
+        // skip leading padding (e.g. macOS wc right-aligns its counts)
+        TEST_ASSERT_EQUAL_STRING(test_cases[i].expected, output + strspn(output, " \t"));
     }
 }
 
