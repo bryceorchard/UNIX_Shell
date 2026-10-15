@@ -72,15 +72,35 @@ int execute_command(char* cmd, char** args, int in, int out, int bg) {
 int execute(struct cmdline *l){
     int i,j;
     int cmd_in = STDIN_FILENO;
+    int file_out = STDOUT_FILENO;
+
     if (l->in) printf("in: %s\n", l->in);
     if (l->out) printf("out: %s\n", l->out);
     if (l->bg) printf("background (&)\n");
 
+    if (l->in) {
+        cmd_in = open(l->in, O_RDONLY);
+        if (cmd_in == -1) {
+            perror("Input file open failed");
+            return EXIT_FAILURE;
+        }
+    }
+    if (l->out) {
+        file_out = open(l->out, O_TRUNC | O_WRONLY | O_CREAT, 0644);
+        if (file_out == -1) {
+            perror("Output file open failed");
+            if (cmd_in != STDIN_FILENO) close(cmd_in);
+            return EXIT_FAILURE;
+        }
+    }
+    
     /* Display each command of the pipe */
     for (i=0; l->seq[i]!=0; i++) {
         char **cmd = l->seq[i];
         int cmd_out = STDOUT_FILENO;
+        if (l->seq[i+1] == 0) cmd_out = file_out;
         int fds[2];
+
         if (l->seq[i+1] != 0) {
             if (pipe(fds) == -1) {
                 perror("Pipe failed");
