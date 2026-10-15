@@ -86,10 +86,16 @@ int execute(struct cmdline *l){
         }
     }
     if (l->out) {
-        file_out = open(l->out, O_TRUNC | O_WRONLY | O_CREAT, 0644);
+        file_out = open(l->out, O_WRONLY | O_CREAT, 0644);
         if (file_out == -1) {
             perror("Output file open failed");
             if (cmd_in != STDIN_FILENO) close(cmd_in);
+            return EXIT_FAILURE;
+        }
+        if (ftruncate(file_out, 0) == -1) {
+            perror("Output file truncate failed");
+            if (cmd_in != STDIN_FILENO) close(cmd_in);
+            close(file_out);
             return EXIT_FAILURE;
         }
     }
