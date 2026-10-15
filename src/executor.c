@@ -13,8 +13,8 @@
  * @brief Executes a single, simple command in another process
  * @param cmd
  * @param args
- * @param in
- * @param out
+ * @param in File descriptior the command reads from (STDIN_FILENO if none)
+ * @param out File descriptor the command writes to (STDOUT_FILENO if none)
  * @param bg
  * @return
  */
@@ -100,7 +100,7 @@ int execute(struct cmdline *l){
         }
     }
     
-    /* Display each command of the pipe */
+    /* Run each command of the pipe */
     for (i=0; l->seq[i]!=0; i++) {
         char **cmd = l->seq[i];
         int cmd_out = STDOUT_FILENO;
