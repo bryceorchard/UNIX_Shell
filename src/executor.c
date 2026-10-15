@@ -104,6 +104,8 @@ int execute(struct cmdline *l){
         if (l->seq[i+1] != 0) {
             if (pipe(fds) == -1) {
                 perror("Pipe failed");
+                if (cmd_in != STDIN_FILENO) close(cmd_in);
+                if (file_out != STDOUT_FILENO) close(file_out);
                 return EXIT_FAILURE;
             }
             cmd_out = fds[1];
