@@ -397,6 +397,116 @@ void test_simple_pipes() {
     }
 }
 
+/**
+ * @brief Pipelines with three or more commands. Each stage's output must
+ *        flow through every pipe in order.
+ */
+void test_multiple_pipes() {
+    struct commands {
+        char *line;
+        char *expected;
+    };
+
+    struct commands test_cases[] = {
+        { .line = "echo a | cat | cat | cat", .expected = "a\n" },
+        { .line = "echo hello world | tr a-z A-Z | cat", .expected = "HELLO WORLD\n" },
+        { .line = "cat resources/contacts.txt | grep Jones | wc -l", .expected = "2\n" },
+        { .line = "cat resources/contacts.txt | sort | uniq", .expected = "Bob Jones\nColin Doe\nDana David\nJenny Case\nLeonard Schmidt\nLeslie Smith\nLinda Gray\nSusan Gee\nTerry Jones\n" },
+        { .line = "cat resources/contacts.txt | sort | head -n 3", .expected = "Bob Jones\nColin Doe\nDana David\n" },
+        // "Jones" appears twice, uniq keeps one
+        { .line = "cat resources/contacts.txt | awk '{ print $2 }' | sort | uniq", .expected = "Case\nDavid\nDoe\nGee\nGray\nJones\nSchmidt\nSmith\n" },
+        { .line = "cat resources/contacts.txt | sort -k2 | head -n 1 | tr a-z A-Z", .expected = "JENNY CASE\n" },
+        { .line = "cat resources/contents.txt | grep -i error | wc -l", .expected = "4\n" }
+    };
+
+    size_t count = sizeof(test_cases) / sizeof(test_cases[0]);
+    char output[1024];
+
+    for (size_t i = 0; i < count; i++) {
+        capture_output(test_cases[i].line, output, sizeof(output));
+        // skip leading padding (e.g. macOS wc right-aligns its counts)
+        TEST_ASSERT_EQUAL_STRING(test_cases[i].expected, output + strspn(output, " \t"));
+    }
+}
+
+/**
+ * @brief Input (<) and output (>) redirection, alone and combined with pipes.
+ *        For '>', nothing should reach stdout; the file is read back with cat.
+ */
+void test_redirection() {
+    struct commands {
+        char *line;
+        char *expected;
+    };
+
+    // '<' only: output still goes to stdout
+    struct commands in_cases[] = {
+        { .line = "sort < resources/contacts.txt", .expected = "Bob Jones\nColin Doe\nDana David\nJenny Case\nLeonard Schmidt\nLeslie Smith\nLinda Gray\nSusan Gee\nTerry Jones\n" },
+        { .line = "wc -l < resources/contacts.txt", .expected = "8\n" },
+        { .line = "grep Jones < resources/contacts.txt", .expected = "Bob Jones\nTerry Jones\n" },
+        { .line = "tr a-z A-Z < resources/contacts.txt | head -n 1", .expected = "BOB JONES\n" },
+        // input file can't be opened: nothing runs, nothing printed
+        { .line = "cat < resources/nope.txt", .expected = "" }
+    };
+
+    // '>': expected is the content of the output file
+    struct commands out_cases[] = {
+        { .line = "echo hello world > /tmp/coen346_redir.txt", .expected = "hello world\n" },
+        // shorter write over the previous file: must be truncated, not "hi\nlo world\n"
+        { .line = "echo hi > /tmp/coen346_redir.txt", .expected = "hi\n" },
+        { .line = "cat resources/contacts.txt | grep Jones > /tmp/coen346_redir.txt", .expected = "Bob Jones\nTerry Jones\n" },
+        { .line = "sort < resources/contacts.txt > /tmp/coen346_redir.txt", .expected = "Bob Jones\nColin Doe\nDana David\nJenny Case\nLeonard Schmidt\nLeslie Smith\nLinda Gray\nSusan Gee\nTerry Jones\n" },
+        { .line = "cat < resources/contacts.txt | sort | uniq > /tmp/coen346_redir.txt", .expected = "Bob Jones\nColin Doe\nDana David\nJenny Case\nLeonard Schmidt\nLeslie Smith\nLinda Gray\nSusan Gee\nTerry Jones\n" }
+    };
+
+    char output[1024];
+
+    size_t in_count = sizeof(in_cases) / sizeof(in_cases[0]);
+    for (size_t i = 0; i < in_count; i++) {
+        capture_output(in_cases[i].line, output, sizeof(output));
+        TEST_ASSERT_EQUAL_STRING(in_cases[i].expected, output + strspn(output, " \t"));
+    }
+
+    unlink("/tmp/coen346_redir.txt"); // start clean so O_CREAT is exercised
+    size_t out_count = sizeof(out_cases) / sizeof(out_cases[0]);
+    for (size_t i = 0; i < out_count; i++) {
+        capture_output(out_cases[i].line, output, sizeof(output));
+        TEST_ASSERT_EQUAL_STRING("", output); // went to the file, not stdout
+
+        capture_output("cat /tmp/coen346_redir.txt", output, sizeof(output));
+        TEST_ASSERT_EQUAL_STRING(out_cases[i].expected, output);
+    }
+    unlink("/tmp/coen346_redir.txt");
+}
+
+/**
+ * @brief A pipeline ending with '&' must return immediately, and its
+ *        commands must still be connected and run to completion.
+ */
+void test_background_pipes() {
+    free_jobs();
+    char output[256];
+
+    // Two 1 s sleeps in the background: execute() should not wait for either.
+    struct timeval start;
+    gettimeofday(&start, NULL);
+    capture_output("sleep 1 | sleep 1 &", output, sizeof(output));
+    double dt = elapsed_since(start);
+    TEST_ASSERT(dt < 0.5);
+    while (waitpid(-1, NULL, 0) > 0); // reap both sleeps
+
+    // Output goes to a file since capture_output returns before bg children finish.
+    unlink("/tmp/coen346_bg.txt");
+    capture_output("echo hello | tr a-z A-Z > /tmp/coen346_bg.txt &", output, sizeof(output));
+    while (waitpid(-1, NULL, 0) > 0); // wait for the pipeline to finish
+
+    capture_output("cat /tmp/coen346_bg.txt", output, sizeof(output));
+    TEST_ASSERT_EQUAL_STRING("HELLO\n", output);
+
+    unlink("/tmp/coen346_bg.txt");
+    free_jobs();
+}
+
 /* ================================================================
  * Process computation time (SIGCHLD -> elapsed-time reporting)
  * ================================================================ */
@@ -619,6 +729,11 @@ int main() {
 
     // simple pipes (x | y)
     test_simple_pipes();
+
+    // multiple pipes, redirection, background pipelines
+    test_multiple_pipes();
+    test_redirection();
+    test_background_pipes();
 
     // Added by Paula Lago
     test_pipe_execution();
