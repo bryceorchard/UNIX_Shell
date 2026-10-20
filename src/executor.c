@@ -160,7 +160,9 @@ int execute(struct cmdline *l){
         }
         printf("\n");
         // fflush(stdout); // Not needed since "\n" already flushes the buffer, but it likely will be needed for writing to files.
-        execute_command(output.we_wordv[0], output.we_wordv, cmd_in, cmd_out, l->bg);
+        if (output.we_wordc > 0) {
+            execute_command(output.we_wordv[0], output.we_wordv, cmd_in, cmd_out, l->bg);
+        }
         wordfree(&output);
         if (cmd_in != STDIN_FILENO) close(cmd_in);
         if (cmd_out != STDOUT_FILENO) close(cmd_out);
