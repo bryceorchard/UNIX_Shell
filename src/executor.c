@@ -125,7 +125,14 @@ int execute(struct cmdline *l){
         strlcpy(cmd_buffer, cmd[0], cmd_length);
         for (j = 1; cmd[j] != NULL; j++) {
             strlcat(cmd_buffer, " ", cmd_length);
-            strlcat(cmd_buffer, cmd[j], cmd_length);
+            if (strpbrk(cmd[j], " \t\\{}<>()|&;") != NULL) {
+                strlcat(cmd_buffer, "'", cmd_length);
+                strlcat(cmd_buffer, cmd[j], cmd_length);    
+                strlcat(cmd_buffer, "'", cmd_length);
+            }
+            else {
+                strlcat(cmd_buffer, cmd[j], cmd_length);
+            }
         }
         wordexp_t output;
         int status = wordexp(cmd_buffer, &output, WRDE_NOCMD);
