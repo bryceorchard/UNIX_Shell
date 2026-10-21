@@ -5,9 +5,12 @@
 #include <sys/wait.h>
 #include <string.h>
 #include <signal.h>
+#include <wordexp.h>
 
 #include "parser.h"
 #include "jobs.h"
+
+#define MAX_ARG_LENGTH 1024
 
 /**
  * @brief Executes a single, simple command in another process
@@ -107,11 +110,46 @@ int execute(struct cmdline *l){
         if (l->seq[i+1] == 0) cmd_out = file_out;
         int fds[2];
 
+        size_t cmd_length = 0;
+        for (j = 0; cmd[j] != NULL; j++) {
+            cmd_length += strnlen(cmd[j], MAX_ARG_LENGTH) + 3; // space (1) + quotes (2)
+        }
+        cmd_length++; // + \0 (1)
+        char *cmd_buffer = malloc(cmd_length);
+        if (cmd_buffer == NULL) {
+            perror("malloc failed");
+            if (cmd_in != STDIN_FILENO) close(cmd_in);
+            if (file_out != STDOUT_FILENO) close(file_out);
+            return EXIT_FAILURE;
+        }
+        strlcpy(cmd_buffer, cmd[0], cmd_length);
+        for (j = 1; cmd[j] != NULL; j++) {
+            strlcat(cmd_buffer, " ", cmd_length);
+            if (strpbrk(cmd[j], " \t\\{}<>()|&;") != NULL) {
+                strlcat(cmd_buffer, "'", cmd_length);
+                strlcat(cmd_buffer, cmd[j], cmd_length);    
+                strlcat(cmd_buffer, "'", cmd_length);
+            }
+            else {
+                strlcat(cmd_buffer, cmd[j], cmd_length);
+            }
+        }
+        wordexp_t output;
+        int status = wordexp(cmd_buffer, &output, WRDE_NOCMD);
+        free(cmd_buffer);
+        if (status != 0) {
+            perror("wordexp failed");
+            if (cmd_in != STDIN_FILENO) close(cmd_in);
+            if (file_out != STDOUT_FILENO) close(file_out);
+            return EXIT_FAILURE;
+        }
+
         if (l->seq[i+1] != 0) {
             if (pipe(fds) == -1) {
                 perror("Pipe failed");
                 if (cmd_in != STDIN_FILENO) close(cmd_in);
                 if (file_out != STDOUT_FILENO) close(file_out);
+                wordfree(&output);
                 return EXIT_FAILURE;
             }
             cmd_out = fds[1];
@@ -122,7 +160,10 @@ int execute(struct cmdline *l){
         }
         printf("\n");
         // fflush(stdout); // Not needed since "\n" already flushes the buffer, but it likely will be needed for writing to files.
-        execute_command(cmd[0], cmd, cmd_in, cmd_out, l->bg);
+        if (output.we_wordc > 0) {
+            execute_command(output.we_wordv[0], output.we_wordv, cmd_in, cmd_out, l->bg);
+        }
+        wordfree(&output);
         if (cmd_in != STDIN_FILENO) close(cmd_in);
         if (cmd_out != STDOUT_FILENO) close(cmd_out);
         // Check for a next command
