@@ -146,7 +146,7 @@ void test_foreground_runs_command() {
     unlink(marker); // start clean
 
     char *args[] = {"sh", "-c", "echo ok > /tmp/coen346_fg_marker", NULL};
-    execute_command("sh", args, STDIN_FILENO, STDOUT_FILENO, 0); // foreground
+    execute_command("sh", args, STDIN_FILENO, STDOUT_FILENO, 0, 1); // foreground, wait
 
     TEST_ASSERT(access(marker, F_OK) == 0);
     unlink(marker);
@@ -161,7 +161,7 @@ void test_foreground_blocks() {
 
     struct timeval start;
     gettimeofday(&start, NULL);
-    execute_command("sleep", args, STDIN_FILENO, STDOUT_FILENO, 0); // foreground
+    execute_command("sleep", args, STDIN_FILENO, STDOUT_FILENO, 0, 1); // foreground, wait
     double dt = elapsed_since(start);
 
     TEST_ASSERT(dt >= 0.9); // we waited out the sleep
@@ -176,7 +176,7 @@ void test_background_execution() {
 
     struct timeval start;
     gettimeofday(&start, NULL);
-    execute_command("sleep", args, STDIN_FILENO, STDOUT_FILENO, 1); // background
+    execute_command("sleep", args, STDIN_FILENO, STDOUT_FILENO, 1, 0); // background
     double dt = elapsed_since(start);
 
     TEST_ASSERT(dt < 0.5); // returned without waiting for the sleep
@@ -279,7 +279,7 @@ void test_background_job_is_registered() {
     free_jobs();
 
     char *args[] = {"true", NULL};
-    execute_command("true", args, STDIN_FILENO, STDOUT_FILENO, 1); // background -> should add_job(pid, ...)
+    execute_command("true", args, STDIN_FILENO, STDOUT_FILENO, 1, 0); // background -> should add_job(pid, ...)
 
     pid_t reaped = waitpid(-1, NULL, 0); // reap the child, obtain its pid
     TEST_ASSERT(reaped > 0);
@@ -508,6 +508,254 @@ void test_background_pipes() {
     free_jobs();
 }
 
+/**
+ * @brief A writer that produces more than the pipe buffer holds (~64 KB) must
+ *        not deadlock: every command of the pipeline has to be started before
+ *        the shell waits on any of them. Before that fix this test hung, so an
+ *        alarm aborts the test run instead of letting it stall forever.
+ */
+void test_pipeline_large_output() {
+    char output[256];
+
+    alarm(10); // a regression shows up as "Alarm clock" instead of a hang
+    capture_output("seq 1 100000 | wc -l", output, sizeof(output));
+    alarm(0);
+    TEST_ASSERT_EQUAL_STRING("100000\n", output + strspn(output, " \t"));
+
+    alarm(10);
+    capture_output("seq 1 200000 | sort -n | tail -n 1", output, sizeof(output));
+    alarm(0);
+    TEST_ASSERT_EQUAL_STRING("200000\n", output);
+}
+
+/**
+ * @brief When the reader exits early, the writer must get SIGPIPE and stop.
+ *        That only happens if no process (including the writer itself) still
+ *        holds the pipe's read end, i.e. each child closes the unused read end.
+ *        `yes` never stops on its own, so a leaked read end hangs forever.
+ */
+void test_pipeline_reader_exits_early() {
+    char output[256];
+
+    alarm(10);
+    capture_output("yes | head -n 1", output, sizeof(output));
+    alarm(0);
+    TEST_ASSERT_EQUAL_STRING("y\n", output);
+
+    alarm(10);
+    capture_output("seq 1 100000 | head -n 1", output, sizeof(output));
+    alarm(0);
+    TEST_ASSERT_EQUAL_STRING("1\n", output);
+
+    alarm(10);
+    capture_output("yes coen346 | head -n 3 | tr a-z A-Z", output, sizeof(output));
+    alarm(0);
+    TEST_ASSERT_EQUAL_STRING("COEN346\nCOEN346\nCOEN346\n", output);
+}
+
+/**
+ * @brief Job commands live in a fixed-size slot (no strdup/free, which the
+ *        SIGCHLD handler may not call). An over-long name is truncated to
+ *        JOB_CMD_MAX - 1 characters rather than overflowing the slot.
+ */
+void test_job_long_command_truncated() {
+    free_jobs();
+
+    char long_cmd[JOB_CMD_MAX * 2];
+    memset(long_cmd, 'x', sizeof(long_cmd) - 1);
+    long_cmd[sizeof(long_cmd) - 1] = '\0';
+    TEST_ASSERT(add_job(7070, long_cmd) == 0);
+
+    char buf[2048];
+    memset(buf, 0, sizeof(buf));
+    FILE *orig = stdout;
+    FILE *cap = fmemopen(buf, sizeof(buf), "w");
+    TEST_ASSERT(cap != NULL);
+    stdout = cap;
+    list_jobs();
+    fflush(cap);
+    stdout = orig;
+    fclose(cap);
+
+    // Count the run of x's in the listing: exactly JOB_CMD_MAX - 1 survive.
+    char *start = strchr(buf, 'x');
+    TEST_ASSERT(start != NULL);
+    TEST_ASSERT(strspn(start, "x") == JOB_CMD_MAX - 1);
+    TEST_ASSERT(strstr(buf, "7070") != NULL); // the pid still follows
+
+    free_jobs();
+}
+
+/* ================================================================
+ * Additional tests (issue #3): the example commands from the spec
+ * ================================================================ */
+
+/**
+ * @brief Runs a command line through /bin/sh and captures its stdout, to use
+ *        as the expected output when it depends on the machine (file owners,
+ *        network interfaces). stderr is discarded.
+ * @param line   Command line to run.
+ * @param buffer Destination for the captured output (always NUL-terminated).
+ * @param size   Size of `buffer` in bytes.
+ */
+static void reference_output(const char *line, char *buffer, size_t size) {
+    buffer[0] = '\0';
+
+    char cmd[1024];
+    snprintf(cmd, sizeof(cmd), "%s 2>/dev/null", line);
+    FILE *sh = popen(cmd, "r");
+    if (sh == NULL) return;
+
+    size_t n = fread(buffer, 1, size - 1, sh);
+    buffer[n] = '\0';
+    pclose(sh);
+}
+
+/**
+ * @brief Creates a temporary directory holding a few small known files
+ *        (a.txt, b.txt, c.txt) for the ls-based tests.
+ * @param dir Template buffer, e.g. "/tmp/coen346_ls_XXXXXX"; filled with the
+ *            created directory's path.
+ * @return 0 on success, -1 on failure.
+ */
+static int make_small_dir(char *dir) {
+    if (mkdtemp(dir) == NULL) return -1;
+
+    const char *names[]    = {"a.txt", "b.txt", "c.txt"};
+    const char *contents[] = {"alpha\n", "beta\n", "gamma\n"};
+    char path[512];
+    for (int i = 0; i < 3; i++) {
+        snprintf(path, sizeof(path), "%s/%s", dir, names[i]);
+        FILE *f = fopen(path, "w");
+        if (f == NULL) return -1;
+        fputs(contents[i], f);
+        fclose(f);
+    }
+    return 0;
+}
+
+/**
+ * @brief Removes the directory made by make_small_dir() and its files.
+ */
+static void remove_small_dir(const char *dir) {
+    const char *names[] = {"a.txt", "b.txt", "c.txt"};
+    char path[512];
+    for (int i = 0; i < 3; i++) {
+        snprintf(path, sizeof(path), "%s/%s", dir, names[i]);
+        unlink(path);
+    }
+    rmdir(dir);
+}
+
+/**
+ * @brief ls -l | awk '{print $9,$3,$4}' prints each file's name, owner and
+ *        group. Owners differ between machines, so the expected output comes
+ *        from /bin/sh running the same line in the same directory.
+ */
+void test_additional_ls_awk() {
+    char cwd[1024];
+    TEST_ASSERT(getcwd(cwd, sizeof(cwd)) != NULL);
+
+    char dir[] = "/tmp/coen346_ls_XXXXXX";
+    TEST_ASSERT(make_small_dir(dir) == 0);
+    TEST_ASSERT(chdir(dir) == 0);
+
+    const char *line = "ls -l | awk '{print $9,$3,$4}'";
+    char output[1024], expected[1024];
+    capture_output(line, output, sizeof(output));
+    reference_output(line, expected, sizeof(expected));
+
+    TEST_ASSERT(chdir(cwd) == 0);
+    remove_small_dir(dir);
+
+    TEST_ASSERT(strstr(output, "a.txt ") != NULL); // file name came first
+    TEST_ASSERT(strstr(output, "c.txt ") != NULL);
+    TEST_ASSERT_EQUAL_STRING(expected, output);
+}
+
+/**
+ * @brief ls | xargs cat prints every file in a directory of small files, in
+ *        the order ls lists them.
+ */
+void test_additional_ls_xargs_cat() {
+    char cwd[1024];
+    TEST_ASSERT(getcwd(cwd, sizeof(cwd)) != NULL);
+
+    char dir[] = "/tmp/coen346_xargs_XXXXXX";
+    TEST_ASSERT(make_small_dir(dir) == 0);
+    TEST_ASSERT(chdir(dir) == 0);
+
+    char output[1024];
+    capture_output("ls | xargs cat", output, sizeof(output));
+
+    TEST_ASSERT(chdir(cwd) == 0);
+    remove_small_dir(dir);
+
+    TEST_ASSERT_EQUAL_STRING("alpha\nbeta\ngamma\n", output);
+}
+
+/**
+ * @brief The fixed-output example commands: grep on a file, a line count, a
+ *        sed substitution.
+ */
+void test_additional_fixed_output() {
+    struct commands {
+        char *line;
+        char *expected;
+    };
+
+    struct commands test_cases[] = {
+        // grep with a file argument (no pipe); case-sensitive, so ERROR/Error are skipped
+        { .line = "grep error resources/contents.txt", .expected = "This line contains an error.\nHere is another line with an error.\n" },
+        // contents.txt has no trailing newline, so wc -l counts 8, not 9
+        { .line = "cat resources/contents.txt | wc -l", .expected = "8\n" },
+        { .line = "echo \"This is a test stream\" | sed 's/stream/text/'", .expected = "This is a test text\n" }
+    };
+
+    size_t count = sizeof(test_cases) / sizeof(test_cases[0]);
+    char output[1024];
+
+    for (size_t i = 0; i < count; i++) {
+        capture_output(test_cases[i].line, output, sizeof(output));
+        // skip leading padding (e.g. macOS wc right-aligns its counts)
+        TEST_ASSERT_EQUAL_STRING(test_cases[i].expected, output + strspn(output, " \t"));
+    }
+}
+
+/**
+ * @brief ifconfig | grep 192 depends on the machine's interfaces (ifconfig may
+ *        not even be installed), so compare against /bin/sh running the same
+ *        line. Either way the two must agree.
+ */
+void test_additional_ifconfig_grep() {
+    const char *line = "ifconfig | grep 192";
+    char output[4096], expected[4096];
+
+    capture_output(line, output, sizeof(output));
+    reference_output(line, expected, sizeof(expected));
+    TEST_ASSERT_EQUAL_STRING(expected, output);
+}
+
+/**
+ * @brief cat contacts.txt | sort -k2 | uniq > contact_list.txt sorts on the
+ *        second column, drops duplicates and writes the result to a new file
+ *        instead of stdout.
+ */
+void test_additional_sort_uniq_to_file() {
+    const char *list = "/tmp/coen346_contact_list.txt";
+    unlink(list); // must be created by the redirection
+
+    char output[1024];
+    capture_output("cat resources/contacts.txt | sort -k2 | uniq > /tmp/coen346_contact_list.txt",
+                   output, sizeof(output));
+    TEST_ASSERT_EQUAL_STRING("", output); // went to the file, not stdout
+
+    capture_output("cat /tmp/coen346_contact_list.txt", output, sizeof(output));
+    TEST_ASSERT_EQUAL_STRING("Jenny Case\nDana David\nColin Doe\nSusan Gee\nLinda Gray\nBob Jones\nTerry Jones\nLeonard Schmidt\nLeslie Smith\n", output);
+
+    unlink(list);
+}
+
 /* ================================================================
  * Wildcards and environment variables (*, [], ~, $VAR)
  * ================================================================ */
@@ -619,11 +867,42 @@ void test_wildcards() {
  * Process computation time (SIGCHLD -> elapsed-time reporting)
  * ================================================================ */
 
-/* Small helper: capture everything remove_job/list_jobs/the handler print
- * to stdout into `buf`, so we can assert on the completion message. Because
- * the SIGCHLD handler runs on this same thread (it interrupts us during the
- * usleep loop), writing to the redirected stdout from it is not a data race
- * here - it is ordinary same-thread I/O. */
+/**
+ * @brief Starts capturing everything written to file descriptor 1. The
+ *        completion message is emitted with write() (async-signal-safe), which
+ *        bypasses the stdout FILE, so swapping `stdout` would not see it.
+ * @param saved_fd Receives a copy of the real stdout, for fd_capture_stop().
+ * @return The capture file's descriptor, or -1 on failure.
+ */
+static int fd_capture_start(int *saved_fd) {
+    char path[] = "/tmp/coen346_fd_XXXXXX";
+    int tmp_fd = mkstemp(path);
+    if (tmp_fd < 0) return -1;
+    unlink(path); // removed once closed
+
+    fflush(stdout);
+    *saved_fd = dup(STDOUT_FILENO);
+    dup2(tmp_fd, STDOUT_FILENO);
+    return tmp_fd;
+}
+
+/**
+ * @brief Restores the real stdout and copies what was captured into buffer.
+ * @param tmp_fd   Descriptor returned by fd_capture_start().
+ * @param saved_fd Real stdout saved by fd_capture_start().
+ * @param buffer   Destination (always NUL-terminated).
+ * @param size     Size of buffer in bytes.
+ */
+static void fd_capture_stop(int tmp_fd, int saved_fd, char *buffer, size_t size) {
+    fflush(stdout);
+    dup2(saved_fd, STDOUT_FILENO);
+    close(saved_fd);
+
+    lseek(tmp_fd, 0, SEEK_SET);
+    ssize_t n = read(tmp_fd, buffer, size - 1);
+    buffer[n > 0 ? n : 0] = '\0';
+    close(tmp_fd);
+}
 
 /**
  * @brief Removing a tracked job emits the completion message: its PID, the
@@ -636,14 +915,11 @@ void test_completion_message_format() {
 
     char buf[1024];
     memset(buf, 0, sizeof(buf));
-    FILE *orig = stdout;
-    FILE *cap = fmemopen(buf, sizeof(buf), "w");
-    TEST_ASSERT(cap != NULL);
-    stdout = cap;
+    int saved_fd;
+    int cap = fd_capture_start(&saved_fd);
+    TEST_ASSERT(cap >= 0);
     remove_job(8080);
-    fflush(cap);
-    stdout = orig;
-    fclose(cap);
+    fd_capture_stop(cap, saved_fd, buf, sizeof(buf));
 
     TEST_ASSERT(strstr(buf, "8080")         != NULL); // the pid
     TEST_ASSERT(strstr(buf, "completed in") != NULL); // the wording
@@ -665,14 +941,11 @@ void test_completion_time_tracks_elapsed() {
 
     char buf[1024];
     memset(buf, 0, sizeof(buf));
-    FILE *orig = stdout;
-    FILE *cap = fmemopen(buf, sizeof(buf), "w");
-    TEST_ASSERT(cap != NULL);
-    stdout = cap;
+    int saved_fd;
+    int cap = fd_capture_start(&saved_fd);
+    TEST_ASSERT(cap >= 0);
     remove_job(8081);
-    fflush(cap);
-    stdout = orig;
-    fclose(cap);
+    fd_capture_stop(cap, saved_fd, buf, sizeof(buf));
 
     char *p = strstr(buf, "completed in ");
     TEST_ASSERT(p != NULL);
@@ -694,14 +967,11 @@ void test_completion_time_near_zero_when_instant() {
 
     char buf[1024];
     memset(buf, 0, sizeof(buf));
-    FILE *orig = stdout;
-    FILE *cap = fmemopen(buf, sizeof(buf), "w");
-    TEST_ASSERT(cap != NULL);
-    stdout = cap;
+    int saved_fd;
+    int cap = fd_capture_start(&saved_fd);
+    TEST_ASSERT(cap >= 0);
     remove_job(8082);
-    fflush(cap);
-    stdout = orig;
-    fclose(cap);
+    fd_capture_stop(cap, saved_fd, buf, sizeof(buf));
 
     char *p = strstr(buf, "completed in ");
     TEST_ASSERT(p != NULL);
@@ -731,21 +1001,18 @@ void test_sigchld_handler_reports_background_completion() {
 
     char buf[1024];
     memset(buf, 0, sizeof(buf));
-    FILE *orig = stdout;
-    FILE *cap = fmemopen(buf, sizeof(buf), "w");
-    TEST_ASSERT(cap != NULL);
-    stdout = cap;
+    int saved_fd;
+    int cap = fd_capture_start(&saved_fd);
+    TEST_ASSERT(cap >= 0);
 
     char *args[] = {"true", NULL};
-    execute_command("true", args, STDIN_FILENO, STDOUT_FILENO, 1); // bg: add_job(pid); child exits at once
+    execute_command("true", args, STDIN_FILENO, STDOUT_FILENO, 1, 0); // bg: add_job(pid); child exits at once
 
     // Let the child die and the handler run. Do NOT wait() here - that would
     // steal the child from the handler we are testing.
     for (int i = 0; i < 100; i++) usleep(10000); // up to ~1 s
 
-    fflush(cap);
-    stdout = orig;
-    fclose(cap);
+    fd_capture_stop(cap, saved_fd, buf, sizeof(buf));
 
     // The handler printed the completion message...
     TEST_ASSERT(strstr(buf, "completed in") != NULL);
@@ -780,21 +1047,18 @@ void test_sigchld_handler_reaps_multiple() {
     // runs; we just do not want its output interleaved with the test log).
     char buf[2048];
     memset(buf, 0, sizeof(buf));
-    FILE *orig = stdout;
-    FILE *cap = fmemopen(buf, sizeof(buf), "w");
-    TEST_ASSERT(cap != NULL);
-    stdout = cap;
+    int saved_fd;
+    int cap = fd_capture_start(&saved_fd);
+    TEST_ASSERT(cap >= 0);
 
     char *args[] = {"true", NULL};
-    execute_command("true", args, STDIN_FILENO, STDOUT_FILENO, 1);
-    execute_command("true", args, STDIN_FILENO, STDOUT_FILENO, 1);
-    execute_command("true", args, STDIN_FILENO, STDOUT_FILENO, 1);
+    execute_command("true", args, STDIN_FILENO, STDOUT_FILENO, 1, 0);
+    execute_command("true", args, STDIN_FILENO, STDOUT_FILENO, 1, 0);
+    execute_command("true", args, STDIN_FILENO, STDOUT_FILENO, 1, 0);
 
     for (int i = 0; i < 100; i++) usleep(10000); // up to ~1 s
 
-    fflush(cap);
-    stdout = orig;
-    fclose(cap);
+    fd_capture_stop(cap, saved_fd, buf, sizeof(buf));
 
     int added = 0;
     for (int i = 0; i < MAX_JOBS; i++)
@@ -826,6 +1090,7 @@ int main() {
     test_job_table_capacity();
     test_job_slot_reuse_after_remove();
     test_jobs_listing_output();
+    test_job_long_command_truncated();
     test_background_job_is_registered();
 
     // process computation time (SIGCHLD elapsed-time reporting)
@@ -842,6 +1107,15 @@ int main() {
     test_multiple_pipes();
     test_redirection();
     test_background_pipes();
+    test_pipeline_large_output();
+    test_pipeline_reader_exits_early();
+
+    // additional tests from the spec (issue #3)
+    test_additional_ls_awk();
+    test_additional_ls_xargs_cat();
+    test_additional_fixed_output();
+    test_additional_ifconfig_grep();
+    test_additional_sort_uniq_to_file();
 
     // wildcards and environment variables (*, [], ~, $VAR)
     test_wildcards();

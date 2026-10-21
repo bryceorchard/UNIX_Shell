@@ -5,9 +5,11 @@
 #ifndef EXECUTOR_H
 #define EXECUTOR_H
 
+#include <sys/types.h> // for pid_t
+
 #include "parser.h"
 
-int execute_command(char* cmd, char** args, int in, int out, int bg);
+pid_t execute_command(char* cmd, char** args, int in, int out, int bg, int wait);
 
 int execute(struct cmdline *l);
 
