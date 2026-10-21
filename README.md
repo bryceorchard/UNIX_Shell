@@ -67,9 +67,6 @@ pipelines, wildcards (`*`, `[]`, `~`), and environment variables (`$VAR`).
 
 See `AUTHORS.txt` for names and student IDs.
 
-> Before submitting: add `AUTHORS.txt` (each member's last name, first name,
-> and student ID), and name the submission folder `<S1_id>_<S2_id>_pa1`.
-
 ## AI disclosure
 
 Per the course policy, use of generative AI tools on this assignment is
