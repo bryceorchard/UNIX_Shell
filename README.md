@@ -34,6 +34,7 @@ myshell> sleep 5       # foreground: blocks until it finishes
 myshell> jobs          # lists all currently running background processes
 myshell> cat resources/contacts.txt | sort    # pipe: output of cat becomes input of sort
 myshell> cat < resources/contacts.txt | sort | uniq > out.txt   # multiple pipes with redirection
+myshell> echo ~ $HOME resources/c*.txt    # wildcards and environment variables are expanded
 ```
 
 ## Test
@@ -47,7 +48,8 @@ make test
 
 It covers line reading, command parsing (including the background `&` flag
 and misplaced-`&` errors), foreground vs. background execution behavior, the `jobs` command,
-simple and multiple pipes (`cmd1 | cmd2 | ...`), input and output redirection, and background pipelines.
+simple and multiple pipes (`cmd1 | cmd2 | ...`), input and output redirection, background
+pipelines, wildcards (`*`, `[]`, `~`), and environment variables (`$VAR`).
 
 ## Project structure
 
@@ -64,9 +66,6 @@ simple and multiple pipes (`cmd1 | cmd2 | ...`), input and output redirection, a
 ## Authors
 
 See `AUTHORS.txt` for names and student IDs.
-
-> Before submitting: add `AUTHORS.txt` (each member's last name, first name,
-> and student ID), and name the submission folder `<S1_id>_<S2_id>_pa1`.
 
 ## AI disclosure
 
@@ -133,7 +132,7 @@ disclosed below.
   - Discussion of how pipes should be created in the loop and how to pass `in`/`out` file descriptors to `execute_command`.
   - Review of my implementation of pipes in `executor.c` for possible bugs or overlooked cases.
   - Generating the pipe unit tests in `tests/test_main.c`: suggesting test commands with expected outputs, and writing the `capture_output` helper function and test loop from my struct and array draft.
-- **Claude chat URLs:** [Pipe implementation](https://claude.ai/share/cfb64113-afb3-4ab3-8c61-c06254025a16), [Pipe tests](https://claude.ai/share/c678a2cb-1215-4268-8b2d-ae00b3b12384)
+- **Claude chat URLs:** [claude.ai: pipe implementation](https://claude.ai/share/cfb64113-afb3-4ab3-8c61-c06254025a16), [claude.ai: pipe tests](https://claude.ai/share/c678a2cb-1215-4268-8b2d-ae00b3b12384)
 - **Adaptation / verification:** The pipe implementation (in `executor.c`) was fully written by myself; AI was used for explanations, design discussion and review of my implementation. The pipe testing helper function, test loop and most test cases were AI-generated from my struct and array draft, then reviewed line by line and adjusted. Tested manually against the system shell and `make test` passes (83/83). Review findings from Pipe implementation chat (large-output deadlock, stray pipe read end) are currently left as known limitations (Issue #7). 
 
 ### Ismail Cherfaoui log (Issue #7 - multiple pipes)
@@ -144,5 +143,16 @@ disclosed below.
   - Explanation of `open()` flags (`O_RDONLY`, `O_WRONLY`, `O_CREAT`), the permission mode, and the difference between `ftruncate()` and `O_TRUNC` (file size vs offset).
   - Review of my pipe loop in `executor.c`, which flagged the large-output deadlock, the stray pipe read end, and the child inheriting the blocked `SIGCHLD` mask.
   - Generating the unit tests in `tests/test_main.c` for multiple pipes, redirection, and background pipelines.
-- **Claude chat URL:** [Multiple pipes](https://claude.ai/share/f8760da7-b567-41d9-960a-786018754fa2)
+- **Claude chat URL:** [claude.ai](https://claude.ai/share/f8760da7-b567-41d9-960a-786018754fa2)
 - **Adaptation / verification:** The reidrection implementation (`executor.c`) was fully written by myself; AI was used for explanations and review. The tests were AI-generated, then reviewed and adjusted (fixed an inaccurate comment). Tested manually, and `make test` passes (109/109). The deadlock and stray read end are currently left as known limitations.
+
+### Ismail Cherfaoui log (Issue #9 - wildcards and environment variables)
+
+- **Tool used:** Claude (Anthropic).
+- **Intent:**
+  - Conceptual explanation of `wordexp()`/`wordfree()`, `strnlen()`/`strlcpy()`/`strlcat()` and `malloc()`, and how they fit into my pipeline loop.
+  - Discussion of the parser removing quotes, and re-quoting arguments with special characters (`strpbrk()`).
+  - Debugging a crash when a command expands to zero words.
+  - Generating the unit tests in `tests/test_main.c`.
+- **Claude chat URL:** [claude.ai](https://claude.ai/share/26fe56fd-4766-41a0-83da-5c79a0a40c14)
+- **Adaptation / verification:** The wildcard implementation (`executor.c`) was fully written by myself; AI was used for explanation, debugging, and review. The tests were AI-generated, then reviewed. Tested manually against the system shell, and `make test` passes (141/141). Known limitations: `${VAR}` is not expanded, and single quote variables like `'$HOME'` are still expanded because the parser removes quotes before running `execute()`.

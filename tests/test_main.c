@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/time.h>
+#include <sys/stat.h>
 #include <signal.h>
 #include "shell.h"
 #include "executor.h"
@@ -756,6 +757,113 @@ void test_additional_sort_uniq_to_file() {
 }
 
 /* ================================================================
+ * Wildcards and environment variables (*, [], ~, $VAR)
+ * ================================================================ */
+
+// Fixture directory with known files, so glob results match on every machine.
+#define WILD_DIR "/tmp/coen346_wild"
+
+/**
+ * @brief Expansion of '*', '[]', '~' and environment variables, alone and
+ *        combined, plus patterns that match nothing and undefined variables.
+ *        Globs run against WILD_DIR; '~' and $HOME are compared against this
+ *        machine's HOME since it differs between machines.
+ */
+void test_wildcards() {
+    struct commands {
+        char *line;
+        char *expected;
+    };
+
+    // Fixture: three empty files (glob sorts matches: apple, banana, cherry)
+    const char *files[] = { WILD_DIR "/apple.txt", WILD_DIR "/banana.txt", WILD_DIR "/cherry.log" };
+    size_t file_count = sizeof(files) / sizeof(files[0]);
+    mkdir(WILD_DIR, 0755); // may already exist from an aborted run, that's fine
+    for (size_t i = 0; i < file_count; i++) {
+        FILE *f = fopen(files[i], "w");
+        TEST_ASSERT(f != NULL);
+        fclose(f);
+    }
+
+    // wordexp runs in this process, so it sees these variables
+    setenv("COEN346_VAR", "hello", 1);
+    setenv("COEN346_DIR", WILD_DIR, 1);
+    unsetenv("COEN346_UNDEF"); // guaranteed undefined
+
+    struct commands test_cases[] = {
+        // '*'
+        { .line = "echo " WILD_DIR "/*", .expected = WILD_DIR "/apple.txt " WILD_DIR "/banana.txt " WILD_DIR "/cherry.log\n" },
+        { .line = "echo " WILD_DIR "/*.txt", .expected = WILD_DIR "/apple.txt " WILD_DIR "/banana.txt\n" },
+        { .line = "echo " WILD_DIR "/*an*", .expected = WILD_DIR "/banana.txt\n" },
+        // ls only finds the file if it received the expanded name, not the pattern
+        { .line = "ls " WILD_DIR "/*.log", .expected = WILD_DIR "/cherry.log\n" },
+        // '[]': set, range, negation
+        { .line = "echo " WILD_DIR "/[ab]*", .expected = WILD_DIR "/apple.txt " WILD_DIR "/banana.txt\n" },
+        { .line = "echo " WILD_DIR "/[a-c]*.log", .expected = WILD_DIR "/cherry.log\n" },
+        { .line = "echo " WILD_DIR "/[!a]*", .expected = WILD_DIR "/banana.txt " WILD_DIR "/cherry.log\n" },
+        // no match: the pattern is passed through literally
+        { .line = "echo " WILD_DIR "/*.pdf", .expected = WILD_DIR "/*.pdf\n" },
+        { .line = "echo " WILD_DIR "/[xyz]*", .expected = WILD_DIR "/[xyz]*\n" },
+        // '~' is only expanded at the start of a word
+        { .line = "echo a~", .expected = "a~\n" },
+        // environment variables
+        { .line = "echo $COEN346_VAR", .expected = "hello\n" },
+        { .line = "echo $COEN346_VAR world", .expected = "hello world\n" },
+        { .line = "echo pre$COEN346_VAR", .expected = "prehello\n" },
+        // undefined variables expand to nothing (the word disappears, no empty arg)
+        { .line = "echo $COEN346_UNDEF", .expected = "\n" },
+        { .line = "echo a $COEN346_UNDEF b", .expected = "a b\n" },
+        // expands to zero words: nothing runs (needs the we_wordc == 0 check)
+        { .line = "$COEN346_UNDEF", .expected = "" },
+        // combinations
+        { .line = "echo $COEN346_DIR/*.txt", .expected = WILD_DIR "/apple.txt " WILD_DIR "/banana.txt\n" },
+        { .line = "echo $COEN346_DIR/[c]*", .expected = WILD_DIR "/cherry.log\n" },
+        { .line = "echo $COEN346_DIR/*.pdf", .expected = WILD_DIR "/*.pdf\n" },
+        { .line = "echo $COEN346_VAR " WILD_DIR "/[ab]*", .expected = "hello " WILD_DIR "/apple.txt " WILD_DIR "/banana.txt\n" },
+        { .line = "echo $COEN346_UNDEF " WILD_DIR "/*.log", .expected = WILD_DIR "/cherry.log\n" },
+        { .line = "ls " WILD_DIR "/*.txt | wc -l", .expected = "2\n" },
+        { .line = "echo $COEN346_VAR | tr a-z A-Z", .expected = "HELLO\n" }
+    };
+
+    // HOME differs per machine: each %s in expected is replaced by $HOME
+    struct commands home_cases[] = {
+        { .line = "echo ~", .expected = "%s\n" },
+        { .line = "echo $HOME", .expected = "%s\n" },
+        { .line = "echo ~ $HOME", .expected = "%s %s\n" },
+        // tilde expanded, then the glob matches nothing
+        { .line = "echo ~/coen346_nomatch_*", .expected = "%s/coen346_nomatch_*\n" },
+        { .line = "echo $HOME/coen346_nomatch_[xyz]", .expected = "%s/coen346_nomatch_[xyz]\n" }
+    };
+
+    size_t count = sizeof(test_cases) / sizeof(test_cases[0]);
+    char output[1024];
+
+    for (size_t i = 0; i < count; i++) {
+        capture_output(test_cases[i].line, output, sizeof(output));
+        // skip leading padding (e.g. macOS wc right-aligns its counts)
+        TEST_ASSERT_EQUAL_STRING(test_cases[i].expected, output + strspn(output, " \t"));
+    }
+
+    const char *home = getenv("HOME");
+    TEST_ASSERT(home != NULL);
+    size_t home_count = sizeof(home_cases) / sizeof(home_cases[0]);
+    char expected[1024];
+
+    for (size_t i = 0; i < home_count; i++) {
+        // home is passed twice for the "%s %s" case; unused extra args are ignored
+        snprintf(expected, sizeof(expected), home_cases[i].expected, home, home);
+        capture_output(home_cases[i].line, output, sizeof(output));
+        TEST_ASSERT_EQUAL_STRING(expected, output);
+    }
+
+    // Cleanup
+    for (size_t i = 0; i < file_count; i++) unlink(files[i]);
+    rmdir(WILD_DIR);
+    unsetenv("COEN346_VAR");
+    unsetenv("COEN346_DIR");
+}
+
+/* ================================================================
  * Process computation time (SIGCHLD -> elapsed-time reporting)
  * ================================================================ */
 
@@ -1008,6 +1116,9 @@ int main() {
     test_additional_fixed_output();
     test_additional_ifconfig_grep();
     test_additional_sort_uniq_to_file();
+
+    // wildcards and environment variables (*, [], ~, $VAR)
+    test_wildcards();
 
     // Added by Paula Lago
     test_pipe_execution();

@@ -5,9 +5,12 @@
 #include <sys/wait.h>
 #include <string.h>
 #include <signal.h>
+#include <wordexp.h>
 
 #include "parser.h"
 #include "jobs.h"
+
+#define MAX_ARG_LENGTH 1024
 
 /**
  * @brief Marks a file descriptor close-on-exec, so a child keeps no copy of it
@@ -151,6 +154,40 @@ int execute(struct cmdline *l){
         int cmd_out = STDOUT_FILENO;
         if (l->seq[i+1] == 0) cmd_out = file_out;
         int fds[2];
+
+        size_t cmd_length = 0;
+        for (j = 0; cmd[j] != NULL; j++) {
+            cmd_length += strnlen(cmd[j], MAX_ARG_LENGTH) + 3; // space (1) + quotes (2)
+        }
+        cmd_length++; // + \0 (1)
+        char *cmd_buffer = malloc(cmd_length);
+        if (cmd_buffer == NULL) {
+            perror("malloc failed");
+            if (cmd_in != STDIN_FILENO) close(cmd_in);
+            if (file_out != STDOUT_FILENO) close(file_out);
+            return EXIT_FAILURE;
+        }
+        strlcpy(cmd_buffer, cmd[0], cmd_length);
+        for (j = 1; cmd[j] != NULL; j++) {
+            strlcat(cmd_buffer, " ", cmd_length);
+            if (strpbrk(cmd[j], " \t\\{}<>()|&;") != NULL) {
+                strlcat(cmd_buffer, "'", cmd_length);
+                strlcat(cmd_buffer, cmd[j], cmd_length);    
+                strlcat(cmd_buffer, "'", cmd_length);
+            }
+            else {
+                strlcat(cmd_buffer, cmd[j], cmd_length);
+            }
+        }
+        wordexp_t output;
+        int status = wordexp(cmd_buffer, &output, WRDE_NOCMD);
+        free(cmd_buffer);
+        if (status != 0) {
+            perror("wordexp failed");
+            if (cmd_in != STDIN_FILENO) close(cmd_in);
+            if (file_out != STDOUT_FILENO) close(file_out);
+            return EXIT_FAILURE;
+        }
 
         if (l->seq[i+1] != 0) {
             if (pipe(fds) == -1) {
