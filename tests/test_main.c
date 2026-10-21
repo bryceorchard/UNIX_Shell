@@ -508,6 +508,176 @@ void test_background_pipes() {
 }
 
 /* ================================================================
+ * Additional tests (issue #3): the example commands from the spec
+ * ================================================================ */
+
+/**
+ * @brief Runs a command line through /bin/sh and captures its stdout, to use
+ *        as the expected output when it depends on the machine (file owners,
+ *        network interfaces). stderr is discarded.
+ * @param line   Command line to run.
+ * @param buffer Destination for the captured output (always NUL-terminated).
+ * @param size   Size of `buffer` in bytes.
+ */
+static void reference_output(const char *line, char *buffer, size_t size) {
+    buffer[0] = '\0';
+
+    char cmd[1024];
+    snprintf(cmd, sizeof(cmd), "%s 2>/dev/null", line);
+    FILE *sh = popen(cmd, "r");
+    if (sh == NULL) return;
+
+    size_t n = fread(buffer, 1, size - 1, sh);
+    buffer[n] = '\0';
+    pclose(sh);
+}
+
+/**
+ * @brief Creates a temporary directory holding a few small known files
+ *        (a.txt, b.txt, c.txt) for the ls-based tests.
+ * @param dir Template buffer, e.g. "/tmp/coen346_ls_XXXXXX"; filled with the
+ *            created directory's path.
+ * @return 0 on success, -1 on failure.
+ */
+static int make_small_dir(char *dir) {
+    if (mkdtemp(dir) == NULL) return -1;
+
+    const char *names[]    = {"a.txt", "b.txt", "c.txt"};
+    const char *contents[] = {"alpha\n", "beta\n", "gamma\n"};
+    char path[512];
+    for (int i = 0; i < 3; i++) {
+        snprintf(path, sizeof(path), "%s/%s", dir, names[i]);
+        FILE *f = fopen(path, "w");
+        if (f == NULL) return -1;
+        fputs(contents[i], f);
+        fclose(f);
+    }
+    return 0;
+}
+
+/**
+ * @brief Removes the directory made by make_small_dir() and its files.
+ */
+static void remove_small_dir(const char *dir) {
+    const char *names[] = {"a.txt", "b.txt", "c.txt"};
+    char path[512];
+    for (int i = 0; i < 3; i++) {
+        snprintf(path, sizeof(path), "%s/%s", dir, names[i]);
+        unlink(path);
+    }
+    rmdir(dir);
+}
+
+/**
+ * @brief ls -l | awk '{print $9,$3,$4}' prints each file's name, owner and
+ *        group. Owners differ between machines, so the expected output comes
+ *        from /bin/sh running the same line in the same directory.
+ */
+void test_additional_ls_awk() {
+    char cwd[1024];
+    TEST_ASSERT(getcwd(cwd, sizeof(cwd)) != NULL);
+
+    char dir[] = "/tmp/coen346_ls_XXXXXX";
+    TEST_ASSERT(make_small_dir(dir) == 0);
+    TEST_ASSERT(chdir(dir) == 0);
+
+    const char *line = "ls -l | awk '{print $9,$3,$4}'";
+    char output[1024], expected[1024];
+    capture_output(line, output, sizeof(output));
+    reference_output(line, expected, sizeof(expected));
+
+    TEST_ASSERT(chdir(cwd) == 0);
+    remove_small_dir(dir);
+
+    TEST_ASSERT(strstr(output, "a.txt ") != NULL); // file name came first
+    TEST_ASSERT(strstr(output, "c.txt ") != NULL);
+    TEST_ASSERT_EQUAL_STRING(expected, output);
+}
+
+/**
+ * @brief ls | xargs cat prints every file in a directory of small files, in
+ *        the order ls lists them.
+ */
+void test_additional_ls_xargs_cat() {
+    char cwd[1024];
+    TEST_ASSERT(getcwd(cwd, sizeof(cwd)) != NULL);
+
+    char dir[] = "/tmp/coen346_xargs_XXXXXX";
+    TEST_ASSERT(make_small_dir(dir) == 0);
+    TEST_ASSERT(chdir(dir) == 0);
+
+    char output[1024];
+    capture_output("ls | xargs cat", output, sizeof(output));
+
+    TEST_ASSERT(chdir(cwd) == 0);
+    remove_small_dir(dir);
+
+    TEST_ASSERT_EQUAL_STRING("alpha\nbeta\ngamma\n", output);
+}
+
+/**
+ * @brief The fixed-output example commands: grep on a file, a line count, a
+ *        sed substitution.
+ */
+void test_additional_fixed_output() {
+    struct commands {
+        char *line;
+        char *expected;
+    };
+
+    struct commands test_cases[] = {
+        // grep with a file argument (no pipe); case-sensitive, so ERROR/Error are skipped
+        { .line = "grep error resources/contents.txt", .expected = "This line contains an error.\nHere is another line with an error.\n" },
+        // contents.txt has no trailing newline, so wc -l counts 8, not 9
+        { .line = "cat resources/contents.txt | wc -l", .expected = "8\n" },
+        { .line = "echo \"This is a test stream\" | sed 's/stream/text/'", .expected = "This is a test text\n" }
+    };
+
+    size_t count = sizeof(test_cases) / sizeof(test_cases[0]);
+    char output[1024];
+
+    for (size_t i = 0; i < count; i++) {
+        capture_output(test_cases[i].line, output, sizeof(output));
+        // skip leading padding (e.g. macOS wc right-aligns its counts)
+        TEST_ASSERT_EQUAL_STRING(test_cases[i].expected, output + strspn(output, " \t"));
+    }
+}
+
+/**
+ * @brief ifconfig | grep 192 depends on the machine's interfaces (ifconfig may
+ *        not even be installed), so compare against /bin/sh running the same
+ *        line. Either way the two must agree.
+ */
+void test_additional_ifconfig_grep() {
+    const char *line = "ifconfig | grep 192";
+    char output[4096], expected[4096];
+
+    capture_output(line, output, sizeof(output));
+    reference_output(line, expected, sizeof(expected));
+    TEST_ASSERT_EQUAL_STRING(expected, output);
+}
+
+/**
+ * @brief cat contacts.txt | sort -k2 | uniq > contact_list.txt sorts on the
+ *        second column, drops duplicates and writes the result to a new file
+ *        instead of stdout.
+ */
+void test_additional_sort_uniq_to_file() {
+    const char *list = "/tmp/coen346_contact_list.txt";
+    unlink(list); // must be created by the redirection
+
+    char output[1024];
+    capture_output("cat resources/contacts.txt | sort -k2 | uniq > /tmp/coen346_contact_list.txt",
+                   output, sizeof(output));
+    TEST_ASSERT_EQUAL_STRING("", output); // went to the file, not stdout
+
+    capture_output("cat /tmp/coen346_contact_list.txt", output, sizeof(output));
+    TEST_ASSERT_EQUAL_STRING("Jenny Case\nDana David\nColin Doe\nSusan Gee\nLinda Gray\nBob Jones\nTerry Jones\nLeonard Schmidt\nLeslie Smith\n", output);
+
+    unlink(list);
+}
+
+/* ================================================================
  * Process computation time (SIGCHLD -> elapsed-time reporting)
  * ================================================================ */
 
@@ -734,6 +904,13 @@ int main() {
     test_multiple_pipes();
     test_redirection();
     test_background_pipes();
+
+    // additional tests from the spec (issue #3)
+    test_additional_ls_awk();
+    test_additional_ls_xargs_cat();
+    test_additional_fixed_output();
+    test_additional_ifconfig_grep();
+    test_additional_sort_uniq_to_file();
 
     // Added by Paula Lago
     test_pipe_execution();
