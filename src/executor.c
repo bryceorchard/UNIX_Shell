@@ -10,36 +10,57 @@
 #include "jobs.h"
 
 /**
- * @brief Executes a single, simple command in another process
- * @param cmd
- * @param args
- * @param in File descriptior the command reads from (STDIN_FILENO if none)
- * @param out File descriptor the command writes to (STDOUT_FILENO if none)
- * @param bg
- * @return
+ * @brief Marks a file descriptor close-on-exec, so a child keeps no copy of it
+ *        once execvp() succeeds. The copies dup2() puts on stdin/stdout are not
+ *        affected (dup2 clears the flag on the new descriptor).
+ * @param fd Descriptor the shell opened (pipe end or redirection file).
  */
-int execute_command(char* cmd, char** args, int in, int out, int bg) {
+static void set_cloexec(int fd) {
+    if (fcntl(fd, F_SETFD, FD_CLOEXEC) == -1) perror("fcntl FD_CLOEXEC failed");
+}
+
+/**
+ * @brief Executes a single, simple command in another process: handles the
+ *        `jobs` builtin, forks, wires up stdin/stdout, execs the program,
+ *        registers background children in the job table, and waits for
+ *        foreground ones when asked to.
+ * @param cmd  Program to run (looked up in PATH).
+ * @param args NULL-terminated argument vector, args[0] == cmd.
+ * @param in   File descriptor the command reads from (STDIN_FILENO if none).
+ * @param out  File descriptor the command writes to (STDOUT_FILENO if none).
+ * @param bg   Non-zero to run in the background (never waited on).
+ * @param wait Non-zero to wait for a foreground command before returning.
+ *             execute() passes 0 for every command of a pipeline but the last,
+ *             so the whole pipeline is running before anything is waited on.
+ * @return The child's pid, 0 if the command was a builtin run in the shell
+ *         itself, or -1 if fork failed.
+ */
+pid_t execute_command(char* cmd, char** args, int in, int out, int bg, int wait) {
 
     sigset_t mask, prev;
-    sigemptyset(&mask); 
+    sigemptyset(&mask);
     sigaddset(&mask, SIGCHLD);
 
-    if (strcmp(args[0], "jobs") == 0) { 
-        sigprocmask(SIG_BLOCK, &mask, &prev); // Block SIGCHLD to prevent race conditions when adding jobs
-        list_jobs(); 
+    if (strcmp(args[0], "jobs") == 0) {
+        sigprocmask(SIG_BLOCK, &mask, &prev); // the handler must not edit the table mid-listing
+        list_jobs();
         sigprocmask(SIG_SETMASK, &prev, NULL); // Restore previous signal mask
-        return EXIT_SUCCESS; 
+        return 0; // nothing to wait for
     }
 
+    // Block SIGCHLD so a child that exits instantly cannot be reaped by the
+    // handler before add_job() has recorded it.
     sigprocmask(SIG_BLOCK, &mask, &prev);
 
     pid_t pid = fork();
-    
+
     if (pid < 0) {
         perror("fork failed");
-        return EXIT_FAILURE;
+        sigprocmask(SIG_SETMASK, &prev, NULL);
+        return -1;
     }
     else if (pid == 0) { // child
+        sigprocmask(SIG_SETMASK, &prev, NULL); // don't give a blocked SIGCHLD to the program
         if (in != STDIN_FILENO) {
             dup2(in, STDIN_FILENO);
             close(in);
@@ -51,21 +72,31 @@ int execute_command(char* cmd, char** args, int in, int out, int bg) {
         execvp(cmd, args);
         perror(cmd); // only reached if execvp fails
         exit(EXIT_FAILURE);
-    } else { // parent
-        if (bg == 0) {
-            sigprocmask(SIG_SETMASK, &prev, NULL); // Restore previous signal mask
-            waitpid(pid, NULL, 0);
-        } else {
-            printf("child background process pid: %d\n", (int) pid);
-            add_job(pid, cmd); // Add the background job to the job list
-            sigprocmask(SIG_SETMASK, &prev, NULL);
-        }
     }
-    return EXIT_SUCCESS;
+
+    // parent
+    if (bg) {
+        printf("child background process pid: %d\n", (int) pid);
+        add_job(pid, cmd); // Add the background job to the job list
+    }
+    sigprocmask(SIG_SETMASK, &prev, NULL); // restore the previous mask
+    if (!bg && wait) {
+        waitpid(pid, NULL, 0); // ECHILD if the SIGCHLD handler already reaped it, which is fine
+    }
+    return pid;
 }
 
 /**
  * @brief Executes a command pipeline.
+ *
+ * Every command is started before any is waited on: waiting for each in turn
+ * deadlocks as soon as a command writes more than the pipe buffer holds, since
+ * its reader has not been started yet. So only the last command is waited on
+ * as it is launched; the earlier ones are waited on once it has finished.
+ * All descriptors the shell opens are close-on-exec, so a child keeps only its
+ * own stdin/stdout; in particular a writer keeps no copy of its pipe's read
+ * end, so it gets SIGPIPE when the reader exits early (e.g. `yes | head -n 1`).
+ *
  * @param l A pointer to a cmdline structure containing the parsed command.
  * @return 0 on success, or a non-zero value on error.
  */
@@ -84,6 +115,7 @@ int execute(struct cmdline *l){
             perror("Input file open failed");
             return EXIT_FAILURE;
         }
+        set_cloexec(cmd_in);
     }
     if (l->out) {
         file_out = open(l->out, O_WRONLY | O_CREAT, 0644);
@@ -98,9 +130,22 @@ int execute(struct cmdline *l){
             close(file_out);
             return EXIT_FAILURE;
         }
+        set_cloexec(file_out);
     }
-    
-    /* Run each command of the pipe */
+
+    // conditionally allocate an array to hold the pids of the commands in the pipeline
+    int count = 0;
+    while (l->seq[count] != 0) count++;
+    pid_t *pids = calloc(count > 0 ? count : 1, sizeof(pid_t));
+    if (pids == NULL) {
+        perror("calloc failed");
+        if (cmd_in != STDIN_FILENO) close(cmd_in);
+        if (file_out != STDOUT_FILENO) close(file_out);
+        return EXIT_FAILURE;
+    }
+    int status = EXIT_SUCCESS;
+
+    /* Start each command of the pipe */
     for (i=0; l->seq[i]!=0; i++) {
         char **cmd = l->seq[i];
         int cmd_out = STDOUT_FILENO;
@@ -112,17 +157,20 @@ int execute(struct cmdline *l){
                 perror("Pipe failed");
                 if (cmd_in != STDIN_FILENO) close(cmd_in);
                 if (file_out != STDOUT_FILENO) close(file_out);
-                return EXIT_FAILURE;
+                status = EXIT_FAILURE;
+                break; // still wait for the commands already started
             }
+            set_cloexec(fds[0]);
+            set_cloexec(fds[1]);
             cmd_out = fds[1];
         }
-        printf("seq[%d]: ", i);
-        for (j=0; cmd[j]!=0; j++) {
-            printf("'%s' ", cmd[j]);
-        }
-        printf("\n");
-        // fflush(stdout); // Not needed since "\n" already flushes the buffer, but it likely will be needed for writing to files.
-        execute_command(cmd[0], cmd, cmd_in, cmd_out, l->bg);
+
+        int is_last = (l->seq[i+1] == 0);
+        pids[i] = execute_command(cmd[0], cmd, cmd_in, cmd_out, l->bg, is_last);
+        if (pids[i] < 0) status = EXIT_FAILURE;
+        if (is_last) pids[i] = 0; // already waited on
+        // The children have their own copies now; the shell must drop its
+        // copies so each reader sees EOF once its writer exits.
         if (cmd_in != STDIN_FILENO) close(cmd_in);
         if (cmd_out != STDOUT_FILENO) close(cmd_out);
         // Check for a next command
@@ -130,5 +178,13 @@ int execute(struct cmdline *l){
             cmd_in = fds[0];
         }
     }
-    return EXIT_SUCCESS;
+
+    /* Foreground: wait for the earlier commands of the pipeline too */
+    if (!l->bg) {
+        for (j = 0; j < i; j++) {
+            if (pids[j] > 0) waitpid(pids[j], NULL, 0); // ECHILD if the handler reaped it which is fine
+        }
+    }
+    free(pids);
+    return status;
 }
