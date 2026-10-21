@@ -155,6 +155,8 @@ int execute(struct cmdline *l){
         if (l->seq[i+1] == 0) cmd_out = file_out;
         int fds[2];
 
+        /* Expand wildcards and environment variables: rebuild the command as
+         * one string (quoting arguments with special characters) for wordexp */
         size_t cmd_length = 0;
         for (j = 0; cmd[j] != NULL; j++) {
             cmd_length += strnlen(cmd[j], MAX_ARG_LENGTH) + 3; // space (1) + quotes (2)
@@ -165,14 +167,15 @@ int execute(struct cmdline *l){
             perror("malloc failed");
             if (cmd_in != STDIN_FILENO) close(cmd_in);
             if (file_out != STDOUT_FILENO) close(file_out);
-            return EXIT_FAILURE;
+            status = EXIT_FAILURE;
+            break; // still wait for the commands already started
         }
         strlcpy(cmd_buffer, cmd[0], cmd_length);
         for (j = 1; cmd[j] != NULL; j++) {
             strlcat(cmd_buffer, " ", cmd_length);
             if (strpbrk(cmd[j], " \t\\{}<>()|&;") != NULL) {
                 strlcat(cmd_buffer, "'", cmd_length);
-                strlcat(cmd_buffer, cmd[j], cmd_length);    
+                strlcat(cmd_buffer, cmd[j], cmd_length);
                 strlcat(cmd_buffer, "'", cmd_length);
             }
             else {
@@ -180,13 +183,14 @@ int execute(struct cmdline *l){
             }
         }
         wordexp_t output;
-        int status = wordexp(cmd_buffer, &output, WRDE_NOCMD);
+        int expand_status = wordexp(cmd_buffer, &output, WRDE_NOCMD);
         free(cmd_buffer);
-        if (status != 0) {
+        if (expand_status != 0) {
             perror("wordexp failed");
             if (cmd_in != STDIN_FILENO) close(cmd_in);
             if (file_out != STDOUT_FILENO) close(file_out);
-            return EXIT_FAILURE;
+            status = EXIT_FAILURE;
+            break; // still wait for the commands already started
         }
 
         if (l->seq[i+1] != 0) {
@@ -194,6 +198,7 @@ int execute(struct cmdline *l){
                 perror("Pipe failed");
                 if (cmd_in != STDIN_FILENO) close(cmd_in);
                 if (file_out != STDOUT_FILENO) close(file_out);
+                wordfree(&output);
                 status = EXIT_FAILURE;
                 break; // still wait for the commands already started
             }
@@ -203,9 +208,13 @@ int execute(struct cmdline *l){
         }
 
         int is_last = (l->seq[i+1] == 0);
-        pids[i] = execute_command(cmd[0], cmd, cmd_in, cmd_out, l->bg, is_last);
-        if (pids[i] < 0) status = EXIT_FAILURE;
-        if (is_last) pids[i] = 0; // already waited on
+        pids[i] = 0; // nothing to wait for unless a child is started below
+        if (output.we_wordc > 0) { // a command can expand to zero words
+            pids[i] = execute_command(output.we_wordv[0], output.we_wordv, cmd_in, cmd_out, l->bg, is_last);
+            if (pids[i] < 0) status = EXIT_FAILURE;
+            if (is_last) pids[i] = 0; // already waited on
+        }
+        wordfree(&output);
         // The children have their own copies now; the shell must drop its
         // copies so each reader sees EOF once its writer exits.
         if (cmd_in != STDIN_FILENO) close(cmd_in);
