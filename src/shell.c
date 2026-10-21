@@ -19,7 +19,6 @@ void terminate(char *line) {
     if (line)
         free(line); //release memory allocated to line pointer
 
-    free_jobs(); // free memory allocated to jobs array
     printf("bye\n");
     exit(0);
 }

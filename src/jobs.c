@@ -119,14 +119,3 @@ int list_jobs(void) {
     }
     return 0;
 }
-
-/**
- * @brief Forgets every tracked job.
- * @return 0
- */
-int free_jobs(void) {
-    for (int i = 0; i < MAX_JOBS; i++) {
-        jobs[i].active = 0;
-    }
-    return 0;
-}
