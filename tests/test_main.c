@@ -50,6 +50,27 @@ static int tests_failed = 0;
 } while(0)
 
 // Small helper: seconds elapsed since `start`.
+/**
+ * @brief Records a single-process job, as the job tests need.
+ * @param pid Process id to record.
+ * @param cmd Command line shown by `jobs`.
+ * @return add_job()'s result: 0 on success, -1 if the table is full.
+ */
+static int add_test_job(pid_t pid, const char *cmd) {
+    return add_job(&pid, 1, cmd);
+}
+
+/**
+ * @brief Runs a command line through the shell's parser and executor,
+ *        without capturing anything.
+ * @param line Command line to run, e.g. "sleep 1 | sleep 1 &".
+ */
+static void run_line(const char *line) {
+    char *copy = strdup(line); // parsecmd() frees the line it is given
+    struct cmdline *l = parsecmd(&copy);
+    if (l != NULL && l->err == NULL) execute(l);
+}
+
 static double elapsed_since(struct timeval start) {
     struct timeval now;
     gettimeofday(&now, NULL);
@@ -193,10 +214,10 @@ void test_background_execution() {
  * @brief add_job reports success (0) while a free slot exists.
  */
 void test_job_add_returns_success() {
-    free_jobs(); // clean slate
-    TEST_ASSERT(add_job(1001, "sleep 100") == 0);
-    TEST_ASSERT(add_job(1002, "sleep 200") == 0);
-    free_jobs();
+    init_jobs(); // clean slate
+    TEST_ASSERT(add_test_job(1001, "sleep 100") == 0);
+    TEST_ASSERT(add_test_job(1002, "sleep 200") == 0);
+    init_jobs();
 }
 
 /**
@@ -204,13 +225,13 @@ void test_job_add_returns_success() {
  *        removing a pid that was never added, fails (-1).
  */
 void test_job_remove_semantics() {
-    free_jobs();
-    add_job(4242, "sleep 100");
+    init_jobs();
+    add_test_job(4242, "sleep 100");
 
     TEST_ASSERT(remove_job(4242) == 0);   // present -> removed
     TEST_ASSERT(remove_job(4242) == -1);  // already gone
     TEST_ASSERT(remove_job(9999) == -1);  // never tracked
-    free_jobs();
+    init_jobs();
 }
 
 /**
@@ -218,12 +239,12 @@ void test_job_remove_semantics() {
  *        rejected with -1.
  */
 void test_job_table_capacity() {
-    free_jobs();
+    init_jobs();
     for (int i = 0; i < MAX_JOBS; i++) {
-        TEST_ASSERT(add_job(2000 + i, "bg") == 0);
+        TEST_ASSERT(add_test_job(2000 + i, "bg") == 0);
     }
-    TEST_ASSERT(add_job(3000, "overflow") == -1); // table full
-    free_jobs();
+    TEST_ASSERT(add_test_job(3000, "overflow") == -1); // table full
+    init_jobs();
 }
 
 /**
@@ -232,14 +253,14 @@ void test_job_table_capacity() {
  *        no renumber).
  */
 void test_job_slot_reuse_after_remove() {
-    free_jobs();
+    init_jobs();
     for (int i = 0; i < MAX_JOBS; i++) {
-        add_job(100 + i, "bg");
+        add_test_job(100 + i, "bg");
     }
-    TEST_ASSERT(add_job(777, "no room") == -1); // full
+    TEST_ASSERT(add_test_job(777, "no room") == -1); // full
     TEST_ASSERT(remove_job(105) == 0);          // open one slot
-    TEST_ASSERT(add_job(777, "reused") == 0);   // slot reclaimed
-    free_jobs();
+    TEST_ASSERT(add_test_job(777, "reused") == 0);   // slot reclaimed
+    init_jobs();
 }
 
 /**
@@ -247,9 +268,9 @@ void test_job_slot_reuse_after_remove() {
  *        jobs that have been removed. Captures stdout to inspect output.
  */
 void test_jobs_listing_output() {
-    free_jobs();
-    add_job(5151, "sleep 5");
-    add_job(6262, "find /");
+    init_jobs();
+    add_test_job(5151, "sleep 5");
+    add_test_job(6262, "find /");
     remove_job(5151); // should not appear in the listing
 
     char buf[1024];
@@ -267,26 +288,25 @@ void test_jobs_listing_output() {
     TEST_ASSERT(strstr(buf, "6262")   != NULL);  // ... with its pid
     TEST_ASSERT(strstr(buf, "5151")   == NULL);  // removed job absent
 
-    free_jobs();
+    init_jobs();
 }
 
 /**
- * @brief End-to-end: launching a command with bg=1 registers it in the
- *        job table under the child's pid. Reap the child to learn its pid,
+ * @brief End-to-end: running a command line ending in '&' registers it in
+ *        the job table under the child's pid. Reap the child to learn its pid,
  *        then confirm that pid was tracked (remove_job succeeds once).
  */
 void test_background_job_is_registered() {
-    free_jobs();
+    init_jobs();
 
-    char *args[] = {"true", NULL};
-    execute_command("true", args, STDIN_FILENO, STDOUT_FILENO, 1, 0); // background -> should add_job(pid, ...)
+    run_line("true &"); // background -> execute() should add_job(...)
 
     pid_t reaped = waitpid(-1, NULL, 0); // reap the child, obtain its pid
     TEST_ASSERT(reaped > 0);
     TEST_ASSERT(remove_job(reaped) == 0);   // it was in the table
     TEST_ASSERT(remove_job(reaped) == -1);  // and only once
 
-    free_jobs();
+    init_jobs();
 }
 
 /* ================================================================
@@ -314,8 +334,9 @@ static void capture_output(const char *line, char *buffer, size_t size) {
     int saved_fd = dup(STDOUT_FILENO);
     dup2(tmp_fd, STDOUT_FILENO);
 
-    // execute() prints "seq[i]: ..." debug lines through the stdout FILE.
-    // Point that FILE at /dev/null so only the commands' output is captured.
+    // execute_command() prints "child background process pid" lines through
+    // the stdout FILE. Point that FILE at /dev/null so only the commands'
+    // output is captured.
     FILE *orig = stdout;
     stdout = fopen("/dev/null", "w");
 
@@ -485,7 +506,7 @@ void test_redirection() {
  *        commands must still be connected and run to completion.
  */
 void test_background_pipes() {
-    free_jobs();
+    init_jobs();
     char output[256];
 
     // Two 1 s sleeps in the background: execute() should not wait for either.
@@ -505,7 +526,7 @@ void test_background_pipes() {
     TEST_ASSERT_EQUAL_STRING("HELLO\n", output);
 
     unlink("/tmp/coen346_bg.txt");
-    free_jobs();
+    init_jobs();
 }
 
 /**
@@ -559,12 +580,12 @@ void test_pipeline_reader_exits_early() {
  *        JOB_CMD_MAX - 1 characters rather than overflowing the slot.
  */
 void test_job_long_command_truncated() {
-    free_jobs();
+    init_jobs();
 
     char long_cmd[JOB_CMD_MAX * 2];
     memset(long_cmd, 'x', sizeof(long_cmd) - 1);
     long_cmd[sizeof(long_cmd) - 1] = '\0';
-    TEST_ASSERT(add_job(7070, long_cmd) == 0);
+    TEST_ASSERT(add_test_job(7070, long_cmd) == 0);
 
     char buf[2048];
     memset(buf, 0, sizeof(buf));
@@ -583,7 +604,7 @@ void test_job_long_command_truncated() {
     TEST_ASSERT(strspn(start, "x") == JOB_CMD_MAX - 1);
     TEST_ASSERT(strstr(buf, "7070") != NULL); // the pid still follows
 
-    free_jobs();
+    init_jobs();
 }
 
 /* ================================================================
@@ -905,13 +926,13 @@ static void fd_capture_stop(int tmp_fd, int saved_fd, char *buffer, size_t size)
 }
 
 /**
- * @brief Removing a tracked job emits the completion message: its PID, the
+ * @brief Removing a tracked job emits the completion message: its command, the
  *        "completed in ... seconds" wording, and the blue colour the spec
  *        asks for.
  */
 void test_completion_message_format() {
-    free_jobs();
-    add_job(8080, "sleep 1");
+    init_jobs();
+    add_test_job(8080, "sleep 1");
 
     char buf[1024];
     memset(buf, 0, sizeof(buf));
@@ -921,12 +942,12 @@ void test_completion_message_format() {
     remove_job(8080);
     fd_capture_stop(cap, saved_fd, buf, sizeof(buf));
 
-    TEST_ASSERT(strstr(buf, "8080")         != NULL); // the pid
+    TEST_ASSERT(strstr(buf, "] sleep 1 ")   != NULL); // the job's command line
     TEST_ASSERT(strstr(buf, "completed in") != NULL); // the wording
     TEST_ASSERT(strstr(buf, "seconds")      != NULL); // the unit
     TEST_ASSERT(strstr(buf, "\x1b[34m")     != NULL); // printed in blue
 
-    free_jobs();
+    init_jobs();
 }
 
 /**
@@ -935,8 +956,8 @@ void test_completion_message_format() {
  *        should report at least that.
  */
 void test_completion_time_tracks_elapsed() {
-    free_jobs();
-    add_job(8081, "work");
+    init_jobs();
+    add_test_job(8081, "work");
     usleep(300000); // 0.3 s
 
     char buf[1024];
@@ -954,7 +975,7 @@ void test_completion_time_tracks_elapsed() {
     TEST_ASSERT(secs >= 0.25); // at least ~0.3s (generous lower bound)
     TEST_ASSERT(secs <  2.0);  // and not a garbage value
 
-    free_jobs();
+    init_jobs();
 }
 
 /**
@@ -962,8 +983,8 @@ void test_completion_time_tracks_elapsed() {
  *        that start_time is set in add_job rather than left uninitialised.
  */
 void test_completion_time_near_zero_when_instant() {
-    free_jobs();
-    add_job(8082, "quick");
+    init_jobs();
+    add_test_job(8082, "quick");
 
     char buf[1024];
     memset(buf, 0, sizeof(buf));
@@ -980,7 +1001,7 @@ void test_completion_time_near_zero_when_instant() {
     TEST_ASSERT(secs >= 0.0);
     TEST_ASSERT(secs <  0.2); // effectively instant
 
-    free_jobs();
+    init_jobs();
 }
 
 /**
@@ -990,7 +1011,7 @@ void test_completion_time_near_zero_when_instant() {
  *        calls wait() itself.
  */
 void test_sigchld_handler_reports_background_completion() {
-    free_jobs();
+    init_jobs();
 
     struct sigaction sa;
     sa.sa_handler = sigchld_handler;
@@ -1005,8 +1026,7 @@ void test_sigchld_handler_reports_background_completion() {
     int cap = fd_capture_start(&saved_fd);
     TEST_ASSERT(cap >= 0);
 
-    char *args[] = {"true", NULL};
-    execute_command("true", args, STDIN_FILENO, STDOUT_FILENO, 1, 0); // bg: add_job(pid); child exits at once
+    run_line("true &"); // bg: execute() records the job; the child exits at once
 
     // Let the child die and the handler run. Do NOT wait() here - that would
     // steal the child from the handler we are testing.
@@ -1020,10 +1040,10 @@ void test_sigchld_handler_reports_background_completion() {
     // ...and cleared the slot: the table is empty, so MAX_JOBS adds all fit.
     int added = 0;
     for (int i = 0; i < MAX_JOBS; i++)
-        if (add_job(9000 + i, "probe") == 0) added++;
+        if (add_test_job(9000 + i, "probe") == 0) added++;
     TEST_ASSERT(added == MAX_JOBS); // 0 slots were still occupied
 
-    free_jobs();
+    init_jobs();
     signal(SIGCHLD, SIG_DFL); // restore default for later tests
 }
 
@@ -1034,7 +1054,7 @@ void test_sigchld_handler_reports_background_completion() {
  *        none linger in the table.
  */
 void test_sigchld_handler_reaps_multiple() {
-    free_jobs();
+    init_jobs();
 
     struct sigaction sa;
     sa.sa_handler = sigchld_handler;
@@ -1051,10 +1071,9 @@ void test_sigchld_handler_reaps_multiple() {
     int cap = fd_capture_start(&saved_fd);
     TEST_ASSERT(cap >= 0);
 
-    char *args[] = {"true", NULL};
-    execute_command("true", args, STDIN_FILENO, STDOUT_FILENO, 1, 0);
-    execute_command("true", args, STDIN_FILENO, STDOUT_FILENO, 1, 0);
-    execute_command("true", args, STDIN_FILENO, STDOUT_FILENO, 1, 0);
+    run_line("true &");
+    run_line("true &");
+    run_line("true &");
 
     for (int i = 0; i < 100; i++) usleep(10000); // up to ~1 s
 
@@ -1062,11 +1081,110 @@ void test_sigchld_handler_reaps_multiple() {
 
     int added = 0;
     for (int i = 0; i < MAX_JOBS; i++)
-        if (add_job(9100 + i, "probe") == 0) added++;
+        if (add_test_job(9100 + i, "probe") == 0) added++;
     TEST_ASSERT(added == MAX_JOBS); // all three reaped => table empty
 
-    free_jobs();
+    init_jobs();
     signal(SIGCHLD, SIG_DFL);
+}
+
+/**
+ * @brief A background pipeline is ONE job: `jobs` lists it once, with the
+ *        full command line and every pid, and the completion message is
+ *        printed once, when its last process finishes.
+ */
+void test_background_pipeline_is_one_job() {
+    init_jobs();
+    run_line("sleep 1 | sleep 1 &");
+
+    // Listed once, with both commands and their arguments.
+    char buf[1024];
+    memset(buf, 0, sizeof(buf));
+    FILE *orig = stdout;
+    FILE *cap = fmemopen(buf, sizeof(buf), "w");
+    TEST_ASSERT(cap != NULL);
+    stdout = cap;
+    list_jobs();
+    fflush(cap);
+    stdout = orig;
+    fclose(cap);
+    TEST_ASSERT(strstr(buf, "[0] sleep 1 | sleep 1 (pid: ") != NULL);
+    TEST_ASSERT(strstr(buf, "[1]") == NULL); // not one job per process
+
+    // The first process to finish does not end the job...
+    char msg[1024];
+    memset(msg, 0, sizeof(msg));
+    int saved_fd;
+    int fd = fd_capture_start(&saved_fd);
+    TEST_ASSERT(fd >= 0);
+    pid_t first = waitpid(-1, NULL, 0);
+    TEST_ASSERT(remove_job(first) == 0);
+    fd_capture_stop(fd, saved_fd, msg, sizeof(msg));
+    TEST_ASSERT(strstr(msg, "completed in") == NULL);
+
+    // ...the last one does, with a single message for the whole pipeline.
+    memset(msg, 0, sizeof(msg));
+    fd = fd_capture_start(&saved_fd);
+    TEST_ASSERT(fd >= 0);
+    pid_t second = waitpid(-1, NULL, 0);
+    TEST_ASSERT(remove_job(second) == 0);
+    fd_capture_stop(fd, saved_fd, msg, sizeof(msg));
+    TEST_ASSERT(strstr(msg, "sleep 1 | sleep 1 completed in") != NULL);
+    TEST_ASSERT(remove_job(second) == -1); // the job is gone
+
+    init_jobs();
+}
+
+/**
+ * @brief Arguments containing quotes reach the program unchanged: a ' or "
+ *        left in an argument after parsing must not break wordexp().
+ */
+void test_quoted_arguments() {
+    struct commands {
+        char *line;
+        char *expected;
+    };
+    struct commands test_cases[] = {
+        { .line = "echo \"it's\"",          .expected = "it's\n" },
+        { .line = "echo it\\'s",            .expected = "it's\n" },
+        { .line = "echo \"don't | stop\"",  .expected = "don't | stop\n" },
+        { .line = "echo 'say \"hi\"'",       .expected = "say \"hi\"\n" },
+    };
+    char output[256];
+    for (size_t i = 0; i < sizeof(test_cases) / sizeof(test_cases[0]); i++) {
+        capture_output(test_cases[i].line, output, sizeof(output));
+        TEST_ASSERT_EQUAL_STRING(test_cases[i].expected, output);
+    }
+}
+
+/**
+ * @brief A command that fails to exec must not print the shell's buffered
+ *        output a second time (the child would flush its copy of the buffer).
+ */
+void test_failed_exec_does_not_duplicate_output() {
+    char path[] = "/tmp/coen346_dup_XXXXXX";
+    int fd = mkstemp(path);
+    TEST_ASSERT(fd >= 0);
+
+    FILE *orig = stdout;
+    stdout = fdopen(fd, "w"); // a file stream is fully buffered
+    printf("pending\n");      // still sitting in stdout's buffer
+
+    char *args[] = {"coen346_no_such_command", NULL};
+    execute_command(args[0], args, STDIN_FILENO, STDOUT_FILENO, 0, 1);
+
+    fclose(stdout); // flushes and closes fd
+    stdout = orig;
+
+    char buf[64] = {0};
+    FILE *f = fopen(path, "r");
+    TEST_ASSERT(f != NULL);
+    size_t n = fread(buf, 1, sizeof(buf) - 1, f);
+    buf[n] = '\0';
+    fclose(f);
+    unlink(path);
+
+    TEST_ASSERT_EQUAL_STRING("pending\n", buf);
 }
 
 /**
@@ -1082,6 +1200,7 @@ int main() {
     test_parser_misplaced_ampersand();
     test_foreground_runs_command();
     test_foreground_blocks();
+    test_failed_exec_does_not_duplicate_output();
     test_background_execution();
 
     // listing background processes (jobs)
@@ -1099,6 +1218,7 @@ int main() {
     test_completion_time_near_zero_when_instant();
     test_sigchld_handler_reports_background_completion();
     test_sigchld_handler_reaps_multiple();
+    test_background_pipeline_is_one_job();
 
     // simple pipes (x | y)
     test_simple_pipes();
@@ -1119,6 +1239,7 @@ int main() {
 
     // wildcards and environment variables (*, [], ~, $VAR)
     test_wildcards();
+    test_quoted_arguments();
 
     // Added by Paula Lago
     test_pipe_execution();
