@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <termios.h>
 #include <sys/wait.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -12,6 +13,9 @@
 #define KRESET "\x1b[0m"
 
 static job_t jobs[MAX_JOBS];
+
+static volatile sig_atomic_t at_prompt = 0; // 1 while the shell waits for input at its prompt
+static const char *prompt_line = "";        // the prompt as printed, redrawn after a message
 
 /**
  * @brief SIGCHLD handler: reaps every finished child (signals are not queued,
@@ -111,6 +115,10 @@ static void append_uint(char *buf, size_t size, size_t *len, unsigned long n, in
 /**
  * @brief Prints, in blue, how long job i ran:
  *        " Job [<i>] <command line> completed in <s.cc> seconds".
+ *        If the shell is waiting at its prompt, the prompt line is erased
+ *        first and the prompt is drawn again below the message, so it does
+ *        not end up stranded above it. Anything half-typed on that line is
+ *        discarded too, so input the user can no longer see is never run.
  *        Async-signal-safe: the message is built by hand and sent with one write().
  * @param i Index of the job in the table.
  */
@@ -122,8 +130,10 @@ static void report_job_completion(int i) {
     if (elapsed_ns < 0) elapsed_ns = 0;
     unsigned long centis = (unsigned long) ((elapsed_ns + 5000000LL) / 10000000LL); // round to 0.01 s
 
-    char msg[JOB_CMD_MAX + 128];
+    char msg[JOB_CMD_MAX + 256];
     size_t len = 0;
+    int redraw = at_prompt; 
+    if (redraw) append_str(msg, sizeof(msg), &len, "\r\033[K"); // to column 0, clear the line
     append_str(msg, sizeof(msg), &len, KBLUE " Job [");
     append_uint(msg, sizeof(msg), &len, (unsigned long) i, 1);
     append_str(msg, sizeof(msg), &len, "] ");
@@ -133,6 +143,12 @@ static void report_job_completion(int i) {
     append_str(msg, sizeof(msg), &len, ".");
     append_uint(msg, sizeof(msg), &len, centis % 100, 2);
     append_str(msg, sizeof(msg), &len, " seconds" KRESET "\n");
+    if (redraw) {
+        append_str(msg, sizeof(msg), &len, prompt_line);
+        // The erase also hid any half-typed input, still pending in the terminal
+        // tcflush erases it
+        tcflush(STDIN_FILENO, TCIFLUSH);
+    }
 
     ssize_t ignored = write(STDOUT_FILENO, msg, len);
     (void) ignored; // nothing useful to do on a failed write in a handler
@@ -181,4 +197,22 @@ int list_jobs(void) {
         }
     }
     return 0;
+}
+
+/**
+ * @brief Tells the completion reporter whether the shell is waiting at its
+ *        prompt. If it is, a completion message erases the prompt line
+ *        and redraws the prompt below the message. Call with SIGCHLD
+ *        blocked
+ * @param line The prompt exactly as printed (colour codes included), or NULL
+ *             once the shell is no longer waiting at the prompt.
+ */
+void set_waiting_prompt(const char *line) {
+    if (line != NULL) {
+        prompt_line = line;
+        at_prompt = 1; // the handler only reads prompt_line once this is 1
+    }
+    else {
+        at_prompt = 0;
+    }
 }
