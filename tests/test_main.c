@@ -951,6 +951,43 @@ void test_completion_message_format() {
 }
 
 /**
+ * @brief While the shell waits at its prompt, a completion message first
+ *        erases the prompt line and then redraws the prompt after the
+ *        message. When it is not waiting, the message is printed as is.
+ */
+void test_completion_message_redraws_prompt() {
+    init_jobs();
+    char buf[1024];
+    int saved_fd;
+
+    // At the prompt: "\r\033[K" ... message ... prompt
+    set_waiting_prompt("PROMPT> ");
+    add_test_job(8383, "sleep 1");
+    memset(buf, 0, sizeof(buf));
+    int cap = fd_capture_start(&saved_fd);
+    TEST_ASSERT(cap >= 0);
+    remove_job(8383);
+    fd_capture_stop(cap, saved_fd, buf, sizeof(buf));
+    TEST_ASSERT(strncmp(buf, "\r\x1b[K", 4) == 0);            // prompt line erased first
+    TEST_ASSERT(strstr(buf, "sleep 1 completed in") != NULL);
+    size_t n = strlen(buf);
+    TEST_ASSERT(n >= 8 && strcmp(buf + n - 8, "PROMPT> ") == 0); // prompt redrawn last
+
+    // Not at the prompt (e.g. a foreground command is running): no erase, no prompt
+    set_waiting_prompt(NULL);
+    add_test_job(8384, "sleep 1");
+    memset(buf, 0, sizeof(buf));
+    cap = fd_capture_start(&saved_fd);
+    TEST_ASSERT(cap >= 0);
+    remove_job(8384);
+    fd_capture_stop(cap, saved_fd, buf, sizeof(buf));
+    TEST_ASSERT(buf[0] != '\r');
+    TEST_ASSERT(strstr(buf, "PROMPT> ") == NULL);
+
+    init_jobs();
+}
+
+/**
  * @brief The reported time reflects real elapsed wall-clock time, measured
  *        from add_job's start_time to remove_job: a job left alive ~0.3s
  *        should report at least that.
@@ -1214,6 +1251,7 @@ int main() {
 
     // process computation time (SIGCHLD elapsed-time reporting)
     test_completion_message_format();
+    test_completion_message_redraws_prompt();
     test_completion_time_tracks_elapsed();
     test_completion_time_near_zero_when_instant();
     test_sigchld_handler_reports_background_completion();
