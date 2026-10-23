@@ -1,3 +1,10 @@
+/**
+ * @file jobs.c
+ * @brief Background job table: records jobs, reaps finished children
+ *        (SIGCHLD handler), reports their computation time, redraws the
+ *        prompt, and implements the `jobs` builtin.
+ */
+
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>

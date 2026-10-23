@@ -2,6 +2,11 @@
 // Created by Paula on 2025-08-11.
 //
 
+/**
+ * @file shell.h
+ * @brief Prompt colours, line reading and shell termination.
+ */
+
 #ifndef SHELL_H
 #define SHELL_H
 

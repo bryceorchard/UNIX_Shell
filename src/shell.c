@@ -1,6 +1,12 @@
 //
 // Created by Paula on 2025-08-11.
 //
+
+/**
+ * @file shell.c
+ * @brief Reads a command line at the prompt and terminates the shell.
+ */
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>

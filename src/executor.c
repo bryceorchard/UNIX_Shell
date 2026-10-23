@@ -1,3 +1,10 @@
+/**
+ * @file executor.c
+ * @brief Runs parsed command lines: forks and execs each command, wires
+ *        up pipes and redirection, expands wildcards and environment
+ *        variables, and records background pipelines as jobs.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>

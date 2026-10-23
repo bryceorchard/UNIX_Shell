@@ -2,6 +2,11 @@
 // Created by Paula on 2024-07-27.
 //
 
+/**
+ * @file utils.c
+ * @brief Memory allocation helpers that exit on failure.
+ */
+
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>

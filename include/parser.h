@@ -2,6 +2,11 @@
 // Created by Paula on 2024-07-27.
 //
 
+/**
+ * @file parser.h
+ * @brief struct cmdline and the command-line parser.
+ */
+
 #ifndef PARSER_H
 #define PARSER_H
 

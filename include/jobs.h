@@ -1,3 +1,8 @@
+/**
+ * @file jobs.h
+ * @brief Background job table: job_t and the functions that manage it.
+ */
+
 #ifndef JOBS_H
 #define JOBS_H
 

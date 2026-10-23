@@ -2,6 +2,12 @@
 // Created by Paula on 2024-07-27.
 //
 
+/**
+ * @file parser.c
+ * @brief Splits a command line into words and parses it into a struct
+ *        cmdline: commands, pipes, redirections and the background flag.
+ */
+
 #include "parser.h"
 #include "utils.h"
 

@@ -1,3 +1,9 @@
+/**
+ * @file main.c
+ * @brief Entry point: installs the SIGCHLD handler and runs the
+ *        read, parse and execute loop.
+ */
+
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>

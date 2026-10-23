@@ -2,6 +2,11 @@
 // Created by Paula on 2024-07-27.
 //
 
+/**
+ * @file utils.h
+ * @brief Memory allocation helpers.
+ */
+
 #ifndef UTILS_H
 #define UTILS_H
 
