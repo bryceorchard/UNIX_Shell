@@ -14,6 +14,10 @@ make          # compile; produces bin/unix_shell
 make clean    # remove build artifacts (obj/, bin/)
 ```
 
+Requires a C compiler and a C library that provides `strlcpy`/`strlcat`:
+macOS, or Linux with glibc 2.38 or newer (e.g. Ubuntu 24.04+). On older glibc
+the build fails at the link step.
+
 ## Run
 
 ```bash
@@ -27,15 +31,29 @@ You'll get a `myshell>` prompt. Type commands as in a normal shell; type
 myshell> echo coen346
 coen346
 myshell> sleep 5 &     # background: the prompt returns immediately
-
-# Background task runtime is immediately printed upon exit.
-
 myshell> sleep 5       # foreground: blocks until it finishes
-myshell> jobs          # lists all currently running background processes
+myshell> jobs          # lists background jobs and the pids still running
 myshell> cat resources/contacts.txt | sort    # pipe: output of cat becomes input of sort
 myshell> cat < resources/contacts.txt | sort | uniq > out.txt   # multiple pipes with redirection
+myshell> cat resources/contacts.txt | sort | uniq &    # a background pipeline is one job
 myshell> echo ~ $HOME resources/c*.txt    # wildcards and environment variables are expanded
 ```
+
+When a background job finishes, its computation time is printed immediately,
+in blue:
+
+```text
+myshell> sleep 2 | sleep 3 &
+child background process pid: 4821
+child background process pid: 4822
+myshell> jobs
+[0] sleep 2 | sleep 3 (pid: 4821 4822)
+Job [0] sleep 2 | sleep 3 completed in 3.01 seconds
+myshell>
+```
+
+If the shell is waiting at its prompt at that moment, the prompt line is
+cleared and the prompt is redrawn below the message.
 
 ## Test
 
@@ -46,22 +64,46 @@ shell modules (everything except `main.c`).
 make test
 ```
 
-It covers line reading, command parsing (including the background `&` flag
-and misplaced-`&` errors), foreground vs. background execution behavior, the `jobs` command,
-simple and multiple pipes (`cmd1 | cmd2 | ...`), input and output redirection, background
-pipelines, wildcards (`*`, `[]`, `~`), and environment variables (`$VAR`).
+It covers:
+
+- line reading and command parsing (including the background `&` flag and
+  misplaced-`&` errors)
+- foreground vs. background execution, and failed commands not duplicating
+  buffered output
+- the `jobs` command and the job table, including a background pipeline being
+  listed and reported as a single job
+- process computation time: the completion message, its timing, the
+  `SIGCHLD` handler reaping finished jobs, and the prompt redraw
+- simple and multiple pipes (`cmd1 | cmd2 | ...`), input and output
+  redirection, and background pipelines
+- regressions for pipelines that used to hang (output larger than the pipe
+  buffer, readers that exit early such as `yes | head -n 1`)
+- wildcards (`*`, `[]`, `~`), environment variables (`$VAR`), and quoted
+  arguments containing `'` or `"`
 
 ## Project structure
 
 ```text
 .
-├── src/        # implementation (main, shell, parser, executor, utils)
+├── src/        # implementation (main, shell, parser, executor, jobs, utils)
 ├── include/    # public headers
 ├── tests/      # unit tests (test_main.c)
 ├── resources/  # sample input files for testing commands
 ├── docs/       # Doxygen-generated documentation (make docs)
 └── Makefile
 ```
+
+## Known limitations
+
+- Background jobs write directly to the terminal, so their output can land
+  after the prompt (e.g. `echo yes &`), as in bash.
+- When a completion message redraws the prompt, any half-typed input is
+  discarded, since it is no longer visible.
+- At most 10 background jobs at a time, and 16 processes per job.
+- `${VAR}` is not expanded. Because the parser removes quotes before
+  expansion, `'$HOME'` is still expanded, while a double-quoted argument
+  containing spaces (e.g. `"$HOME x"`) is not.
+- Ctrl-C is not handled: it stops the shell along with the foreground command.
 
 ## Authors
 
