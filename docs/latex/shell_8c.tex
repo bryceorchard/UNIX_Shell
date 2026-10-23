@@ -1,0 +1,63 @@
+\doxysection{src/\+shell.c File Reference}
+\hypertarget{shell_8c}{}\label{shell_8c}\index{src/shell.c@{src/shell.c}}
+
+
+Reads a command line at the prompt and terminates the shell.  
+
+
+{\ttfamily \+\#include $<$stdlib.\+h$>$}\newline
+{\ttfamily \+\#include $<$stdio.\+h$>$}\newline
+{\ttfamily \+\#include $<$string.\+h$>$}\newline
+{\ttfamily \+\#include $<$limits.\+h$>$}\newline
+{\ttfamily \+\#include $<$signal.\+h$>$}\newline
+{\ttfamily \+\#include "{}shell.\+h"{}}\newline
+{\ttfamily \+\#include "{}utils.\+h"{}}\newline
+{\ttfamily \+\#include "{}jobs.\+h"{}}\newline
+\doxysubsubsection*{Macros}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{shell_8c_ac32a64287ea390f1dbbfa39ed88637ff}\label{shell_8c_ac32a64287ea390f1dbbfa39ed88637ff} 
+\+\#define {\bfseries PROMPT\+\_\+\+LINE\+\_\+\+MAX}~128
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Functions}
+\begin{DoxyCompactItemize}
+\item 
+void \doxymbox{\hyperlink{shell_8c_af69b00213f442fb8112808a09c4f330c}{terminate}} (char \texorpdfstring{$\ast$}{*}line)
+\item 
+char \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{shell_8c_a9b8811afbfe9ba5225a2c777ab376758}{readline}} (const char \texorpdfstring{$\ast$}{*}prompt)
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+Reads a command line at the prompt and terminates the shell. 
+
+
+
+\label{shell_8c_doc-func-members}
+\Hypertarget{shell_8c_doc-func-members}
+\doxysubsection{Function Documentation}
+\Hypertarget{shell_8c_a9b8811afbfe9ba5225a2c777ab376758}\index{shell.c@{shell.c}!readline@{readline}}
+\index{readline@{readline}!shell.c@{shell.c}}
+\doxysubsubsection{\texorpdfstring{readline()}{readline()}}
+{\footnotesize\ttfamily \label{shell_8c_a9b8811afbfe9ba5225a2c777ab376758} 
+char \texorpdfstring{$\ast$}{*} readline (\begin{DoxyParamCaption}\item[{const char \texorpdfstring{$\ast$}{*}}]{prompt}{}\end{DoxyParamCaption})}
+
+Read a line from standard input. While waiting for input, the shell is "{}at the prompt"{}: a background job finishing meanwhile redraws the prompt below its completion message (see \doxylink{jobs_8h_a3ca2c73c418c6056ac4728c195f89afa}{set\+\_\+waiting\+\_\+prompt()}). 
+\begin{DoxyParams}{Parameters}
+{\em prompt} & A prompt to print in the shell before user input (ie: myshell\texorpdfstring{$>$}{>}:) \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+User input read from standard input 
+\end{DoxyReturn}
+\Hypertarget{shell_8c_af69b00213f442fb8112808a09c4f330c}\index{shell.c@{shell.c}!terminate@{terminate}}
+\index{terminate@{terminate}!shell.c@{shell.c}}
+\doxysubsubsection{\texorpdfstring{terminate()}{terminate()}}
+{\footnotesize\ttfamily \label{shell_8c_af69b00213f442fb8112808a09c4f330c} 
+void terminate (\begin{DoxyParamCaption}\item[{char \texorpdfstring{$\ast$}{*}}]{line}{}\end{DoxyParamCaption})}
+
+Terminate the shell program 
+\begin{DoxyParams}{Parameters}
+{\em line} & \\
+\hline
+\end{DoxyParams}

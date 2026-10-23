@@ -1,0 +1,179 @@
+\chapter{COEN 346 — UNIX Shell (Group 10) }
+\hypertarget{index}{}\label{index}\index{COEN 346 — UNIX Shell (Group 10)@{COEN 346 — UNIX Shell (Group 10)}}
+\label{index_md__r_e_a_d_m_e}%
+\Hypertarget{index_md__r_e_a_d_m_e}%
+
+
+A simple command-\/line shell for UNIX, built for COEN 346 (Operating Systems, Fall 2026) at Concordia University. Based on the \href{https://github.com/gmounie/ensimag-shell}{\texttt{ensimag-\/shell}} skeleton.\hypertarget{index_autotoc_md1}{}\doxysection{\texorpdfstring{Build}{Build}}\label{index_autotoc_md1}
+From the project root:
+
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{make\ \ \ \ \ \ \ \ \ \ \#\ compile;\ produces\ bin/unix\_shell}
+\DoxyCodeLine{make\ clean\ \ \ \ \#\ remove\ build\ artifacts\ (obj/,\ bin/)}
+
+\end{DoxyCode}
+
+
+Requires a C compiler and a C library that provides {\ttfamily strlcpy}/{\ttfamily strlcat}: mac\+OS, or Linux with glibc 2.\+38 or newer (e.\+g. Ubuntu 24.\+04+). On older glibc the build fails at the link step.\hypertarget{index_autotoc_md2}{}\doxysection{\texorpdfstring{Run}{Run}}\label{index_autotoc_md2}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{./bin/unix\_shell}
+
+\end{DoxyCode}
+
+
+You\textquotesingle{}ll get a {\ttfamily myshell\texorpdfstring{$>$}{>}} prompt. Type commands as in a normal shell; type {\ttfamily exit} (or Ctrl-\/D) to quit.
+
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{myshell>\ echo\ coen346}
+\DoxyCodeLine{coen346}
+\DoxyCodeLine{myshell>\ sleep\ 5\ \&\ \ \ \ \ \#\ background:\ the\ prompt\ returns\ immediately}
+\DoxyCodeLine{myshell>\ sleep\ 5\ \ \ \ \ \ \ \#\ foreground:\ blocks\ until\ it\ finishes}
+\DoxyCodeLine{myshell>\ jobs\ \ \ \ \ \ \ \ \ \ \#\ lists\ background\ jobs\ and\ the\ pids\ still\ running}
+\DoxyCodeLine{myshell>\ cat\ resources/contacts.txt\ |\ sort\ \ \ \ \#\ pipe:\ output\ of\ cat\ becomes\ input\ of\ sort}
+\DoxyCodeLine{myshell>\ cat\ <\ resources/contacts.txt\ |\ sort\ |\ uniq\ >\ out.txt\ \ \ \#\ multiple\ pipes\ with\ redirection}
+\DoxyCodeLine{myshell>\ cat\ resources/contacts.txt\ |\ sort\ |\ uniq\ \&\ \ \ \ \#\ a\ background\ pipeline\ is\ one\ job}
+\DoxyCodeLine{myshell>\ echo\ \string~\ \$HOME\ resources/c*.txt\ \ \ \ \#\ wildcards\ and\ environment\ variables\ are\ expanded}
+
+\end{DoxyCode}
+
+
+When a background job finishes, its computation time is printed immediately, in blue:
+
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{myshell>\ sleep\ 2\ |\ sleep\ 3\ \&}
+\DoxyCodeLine{child\ background\ process\ pid:\ 4821}
+\DoxyCodeLine{child\ background\ process\ pid:\ 4822}
+\DoxyCodeLine{myshell>\ jobs}
+\DoxyCodeLine{[0]\ sleep\ 2\ |\ sleep\ 3\ (pid:\ 4821\ 4822)}
+\DoxyCodeLine{Job\ [0]\ sleep\ 2\ |\ sleep\ 3\ completed\ in\ 3.01\ seconds}
+\DoxyCodeLine{myshell>}
+
+\end{DoxyCode}
+
+
+If the shell is waiting at its prompt at that moment, the prompt line is cleared and the prompt is redrawn below the message.\hypertarget{index_autotoc_md3}{}\doxysection{\texorpdfstring{Test}{Test}}\label{index_autotoc_md3}
+A small unit-\/test suite lives in {\ttfamily tests/\+test\+\_\+main.\+c} and links against the shell modules (everything except {\ttfamily \doxylink{main_8c}{main.\+c}}).
+
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{make\ test}
+
+\end{DoxyCode}
+
+
+It covers:
+
+
+\begin{DoxyItemize}
+\item line reading and command parsing (including the background {\ttfamily \&} flag and misplaced-\/{\ttfamily \&} errors)
+\item foreground vs. background execution, and failed commands not duplicating buffered output
+\item the {\ttfamily jobs} command and the job table, including a background pipeline being listed and reported as a single job
+\item process computation time: the completion message, its timing, the {\ttfamily SIGCHLD} handler reaping finished jobs, and the prompt redraw
+\item simple and multiple pipes ({\ttfamily cmd1 \texorpdfstring{$\vert$}{|} cmd2 \texorpdfstring{$\vert$}{|} ...}), input and output redirection, and background pipelines
+\item regressions for pipelines that used to hang (output larger than the pipe buffer, readers that exit early such as {\ttfamily yes \texorpdfstring{$\vert$}{|} head -\/n 1})
+\item wildcards ({\ttfamily \texorpdfstring{$\ast$}{*}}, {\ttfamily \+[]}, {\ttfamily \texorpdfstring{$\sim$}{\string~}}), environment variables ({\ttfamily \$VAR}), and quoted arguments containing {\ttfamily \textquotesingle{}} or {\ttfamily "{}}
+\end{DoxyItemize}\hypertarget{index_autotoc_md4}{}\doxysection{\texorpdfstring{Project structure}{Project structure}}\label{index_autotoc_md4}
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{.}
+\DoxyCodeLine{├──\ src/\ \ \ \ \ \ \ \ \#\ implementation\ (main,\ shell,\ parser,\ executor,\ jobs,\ utils)}
+\DoxyCodeLine{├──\ include/\ \ \ \ \#\ public\ headers}
+\DoxyCodeLine{├──\ tests/\ \ \ \ \ \ \#\ unit\ tests\ (test\_main.c)}
+\DoxyCodeLine{├──\ resources/\ \ \#\ sample\ input\ files\ for\ testing\ commands}
+\DoxyCodeLine{├──\ docs/\ \ \ \ \ \ \ \#\ Doxygen-\/generated\ documentation\ (make\ docs)}
+\DoxyCodeLine{└──\ Makefile}
+
+\end{DoxyCode}
+\hypertarget{index_autotoc_md5}{}\doxysection{\texorpdfstring{Known limitations}{Known limitations}}\label{index_autotoc_md5}
+
+\begin{DoxyItemize}
+\item Background jobs write directly to the terminal, so their output can land after the prompt (e.\+g. {\ttfamily echo yes \&}), as in bash.
+\item When a completion message redraws the prompt, any half-\/typed input is discarded, since it is no longer visible.
+\item At most 10 background jobs at a time, and 16 processes per job.
+\item {\ttfamily \$\{VAR\}} is not expanded. Because the parser removes quotes before expansion, {\ttfamily \textquotesingle{}\$HOME\textquotesingle{}} is still expanded, while a double-\/quoted argument containing spaces (e.\+g. {\ttfamily "{}\$HOME x"{}}) is not.
+\item Ctrl-\/C is not handled: it stops the shell along with the foreground command.
+\end{DoxyItemize}\hypertarget{index_autotoc_md6}{}\doxysection{\texorpdfstring{Authors}{Authors}}\label{index_autotoc_md6}
+See {\ttfamily AUTHORS.\+txt} for names and student IDs.\hypertarget{index_autotoc_md7}{}\doxysection{\texorpdfstring{AI disclosure}{AI disclosure}}\label{index_autotoc_md7}
+Per the course policy, use of generative AI tools on this assignment is disclosed below.\hypertarget{index_autotoc_md8}{}\doxysubsection{\texorpdfstring{Bryce Orchard log}{Bryce Orchard log}}\label{index_autotoc_md8}
+
+\begin{DoxyItemize}
+\item {\bfseries{Tool used:}} Claude (Anthropic).
+\item {\bfseries{Intent:}}
+\begin{DoxyItemize}
+\item Conceptual explanation of background-\/process handling, zombie reaping, signals ({\ttfamily SIGCHLD}, {\ttfamily EINTR}), and terminal control codes.
+\item Debugging a defect where foreground command output printed {\itshape after} the prompt once a background command had run — traced to using {\ttfamily wait(\+NULL)} (wait for any child) instead of {\ttfamily waitpid(pid, …)} (wait for the specific child).
+\item Generating the unit tests in {\ttfamily tests/\+test\+\_\+main.\+c} for the background-\/execution feature.
+\item Co-\/authoring the README
+\end{DoxyItemize}
+\item {\bfseries{Claude chat URL:}} \href{https://claude.ai/share/55c21943-0ed2-4061-b77b-2629ae1ed79a}{\texttt{claude.\+ai}}
+\item {\bfseries{Adaptation / verification:}} AI-\/suggested code was reviewed and verified. The tests were compiled and run (15/\+15 passing) before inclusion. The generated README draft was heavily modified.
+\end{DoxyItemize}\hypertarget{index_autotoc_md9}{}\doxysubsection{\texorpdfstring{Bryce Orchard log (Issue \#4 — jobs / background-\/process listing)}{Bryce Orchard log (Issue \#4 — jobs / background-\/process listing)}}\label{index_autotoc_md9}
+
+\begin{DoxyItemize}
+\item {\bfseries{Tool used:}} Claude (Anthropic).
+\item {\bfseries{Intent:}}
+\begin{DoxyItemize}
+\item Conceptual discussion of data structures for tracking background jobs (fixed job table vs. linked list vs. tree), job-\/id assignment and reuse, and where the add / remove / list logic belongs in the executor.
+\item Design discussion of a {\ttfamily SIGCHLD}-\/based reaping approach — async-\/signal safety, blocking {\ttfamily SIGCHLD} around {\ttfamily fork()}/{\ttfamily \doxylink{jobs_8h_af5d22500059ec4ae2331ced71d9c18aa}{add\+\_\+job}}, and {\ttfamily EINTR} / {\ttfamily SA\+\_\+\+RESTART} handling.
+\item Generating the unit tests in {\ttfamily tests/\+test\+\_\+main.\+c} for the {\ttfamily jobs} built-\/in / background-\/process listing feature.
+\end{DoxyItemize}
+\item {\bfseries{Claude chat URL:}} \href{https://claude.ai/share/a4fb6e61-c6d1-4fb6-a732-b8f103552182}{\texttt{claude.\+ai}}
+\item {\bfseries{Adaptation / verification:}} AI-\/suggested tests were reviewed and run via {\ttfamily make test} (all assertions passing) before inclusion. None of the non-\/test AI suggested code was copied, and was only used as inspiration.
+\end{DoxyItemize}\hypertarget{index_autotoc_md10}{}\doxysubsection{\texorpdfstring{Bryce Orchard log (Issue \#8 — process computation time)}{Bryce Orchard log (Issue \#8 — process computation time)}}\label{index_autotoc_md10}
+
+\begin{DoxyItemize}
+\item {\bfseries{Tool used:}} Claude (Anthropic).
+\item {\bfseries{Intent:}}
+\begin{DoxyItemize}
+\item Conceptual discussion of the computation-\/time feature — why async-\/signal-\/safety still matters even though {\ttfamily SIGCHLD} is blocked during the handler, draining coalesced signals with {\ttfamily waitpid(-\/1, WNOHANG)}, {\ttfamily SA\+\_\+\+RESTART}, and whether {\ttfamily fflush(stdout)} before {\ttfamily fork()} is needed.
+\item Review of the existing implementation (the {\ttfamily SIGCHLD} handler plus the {\ttfamily \doxylink{jobs_8h_af5d22500059ec4ae2331ced71d9c18aa}{add\+\_\+job}}/{\ttfamily \doxylink{jobs_8h_a0057c250096d23b01eef8e60280f9be0}{remove\+\_\+job}} start-\/time and elapsed-\/time logic).
+\item Generating the unit tests in {\ttfamily tests/\+test\+\_\+main.\+c} for the process computation time (Issue \#8) feature.
+\end{DoxyItemize}
+\item {\bfseries{Claude chat URL:}} \href{https://claude.ai/share/4137fd13-b14d-4301-b6cc-4b6674c9c00f}{\texttt{claude.\+ai}}
+\item {\bfseries{Adaptation / verification:}} AI-\/suggested tests were reviewed and run via {\ttfamily make test} (all assertions passing) before inclusion. None of the non-\/test AI-\/suggested code was copied.
+\end{DoxyItemize}\hypertarget{index_autotoc_md11}{}\doxysubsection{\texorpdfstring{Ismail Cherfaoui log (Issue \#6 -\/ simple pipe)}{Ismail Cherfaoui log (Issue \#6 -\/ simple pipe)}}\label{index_autotoc_md11}
+
+\begin{DoxyItemize}
+\item {\bfseries{Tool used:}} Claude (Anthropic).
+\item {\bfseries{Intent:}}
+\begin{DoxyItemize}
+\item Understanding the assignment, the skeleton ({\ttfamily struct \doxylink{structcmdline}{cmdline}}, {\ttfamily \doxylink{executor_8h_a79e32c301fe8283716f72d44cc3c9efe}{execute}}) and Bryce\textquotesingle{}s implementation of {\ttfamily \doxylink{executor_8h_a459aefd9ccfeda9b3be4d2c5e663c2b4}{execute\+\_\+command}}.
+\item Conceptual explanation of file descriptors and the different system calls used for pipes ({\ttfamily pipe()}, {\ttfamily fork()}, {\ttfamily dup()}/{\ttfamily dup2()}, {\ttfamily close()}).
+\item Explanation of the order in which the shell and each child call {\ttfamily pipe()}, {\ttfamily fork()}, {\ttfamily dup2()}, {\ttfamily close()} for a pipeline.
+\item Discussion of how pipes should be created in the loop and how to pass {\ttfamily in}/{\ttfamily out} file descriptors to {\ttfamily \doxylink{executor_8h_a459aefd9ccfeda9b3be4d2c5e663c2b4}{execute\+\_\+command}}.
+\item Review of my implementation of pipes in {\ttfamily \doxylink{executor_8c}{executor.\+c}} for possible bugs or overlooked cases.
+\item Generating the pipe unit tests in {\ttfamily tests/\+test\+\_\+main.\+c}: suggesting test commands with expected outputs, and writing the {\ttfamily capture\+\_\+output} helper function and test loop from my struct and array draft.
+\end{DoxyItemize}
+\item {\bfseries{Claude chat URLs:}} \href{https://claude.ai/share/cfb64113-afb3-4ab3-8c61-c06254025a16}{\texttt{claude.\+ai: pipe implementation}}, \href{https://claude.ai/share/c678a2cb-1215-4268-8b2d-ae00b3b12384}{\texttt{claude.\+ai: pipe tests}}
+\item {\bfseries{Adaptation / verification:}} The pipe implementation (in {\ttfamily \doxylink{executor_8c}{executor.\+c}}) was fully written by myself; AI was used for explanations, design discussion and review of my implementation. The pipe testing helper function, test loop and most test cases were AI-\/generated from my struct and array draft, then reviewed line by line and adjusted. Tested manually against the system shell and {\ttfamily make test} passes (83/\+83). Review findings from Pipe implementation chat (large-\/output deadlock, stray pipe read end) are currently left as known limitations (Issue \#7).
+\end{DoxyItemize}\hypertarget{index_autotoc_md12}{}\doxysubsection{\texorpdfstring{Ismail Cherfaoui log (Issue \#7 -\/ multiple pipes)}{Ismail Cherfaoui log (Issue \#7 -\/ multiple pipes)}}\label{index_autotoc_md12}
+
+\begin{DoxyItemize}
+\item {\bfseries{Tool used:}} Claude (Anthropic).
+\item {\bfseries{Intent:}}
+\begin{DoxyItemize}
+\item Conceptual explanation of how input/\+output redirection fits into my existing pipe loop.
+\item Explanation of {\ttfamily open()} flags ({\ttfamily O\+\_\+\+RDONLY}, {\ttfamily O\+\_\+\+WRONLY}, {\ttfamily O\+\_\+\+CREAT}), the permission mode, and the difference between {\ttfamily ftruncate()} and {\ttfamily O\+\_\+\+TRUNC} (file size vs offset).
+\item Review of my pipe loop in {\ttfamily \doxylink{executor_8c}{executor.\+c}}, which flagged the large-\/output deadlock, the stray pipe read end, and the child inheriting the blocked {\ttfamily SIGCHLD} mask.
+\item Generating the unit tests in {\ttfamily tests/\+test\+\_\+main.\+c} for multiple pipes, redirection, and background pipelines.
+\end{DoxyItemize}
+\item {\bfseries{Claude chat URL:}} \href{https://claude.ai/share/f8760da7-b567-41d9-960a-786018754fa2}{\texttt{claude.\+ai}}
+\item {\bfseries{Adaptation / verification:}} The reidrection implementation ({\ttfamily \doxylink{executor_8c}{executor.\+c}}) was fully written by myself; AI was used for explanations and review. The tests were AI-\/generated, then reviewed and adjusted (fixed an inaccurate comment). Tested manually, and {\ttfamily make test} passes (109/\+109). The deadlock and stray read end are currently left as known limitations.
+\end{DoxyItemize}\hypertarget{index_autotoc_md13}{}\doxysubsection{\texorpdfstring{Ismail Cherfaoui log (Issue \#9 -\/ wildcards and environment variables)}{Ismail Cherfaoui log (Issue \#9 -\/ wildcards and environment variables)}}\label{index_autotoc_md13}
+
+\begin{DoxyItemize}
+\item {\bfseries{Tool used:}} Claude (Anthropic).
+\item {\bfseries{Intent:}}
+\begin{DoxyItemize}
+\item Conceptual explanation of {\ttfamily wordexp()}/{\ttfamily wordfree()}, {\ttfamily strnlen()}/{\ttfamily strlcpy()}/{\ttfamily strlcat()} and {\ttfamily malloc()}, and how they fit into my pipeline loop.
+\item Discussion of the parser removing quotes, and re-\/quoting arguments with special characters ({\ttfamily strpbrk()}).
+\item Debugging a crash when a command expands to zero words.
+\item Generating the unit tests in {\ttfamily tests/\+test\+\_\+main.\+c}.
+\end{DoxyItemize}
+\item {\bfseries{Claude chat URL:}} \href{https://claude.ai/share/26fe56fd-4766-41a0-83da-5c79a0a40c14}{\texttt{claude.\+ai}}
+\item {\bfseries{Adaptation / verification:}} The wildcard implementation ({\ttfamily \doxylink{executor_8c}{executor.\+c}}) was fully written by myself; AI was used for explanation, debugging, and review. The tests were AI-\/generated, then reviewed. Tested manually against the system shell, and {\ttfamily make test} passes (141/\+141). Known limitations: {\ttfamily \$\{VAR\}} is not expanded, and single quote variables like {\ttfamily \textquotesingle{}\$HOME\textquotesingle{}} are still expanded because the parser removes quotes before running {\ttfamily \doxylink{executor_8h_a79e32c301fe8283716f72d44cc3c9efe}{execute()}}. 
+\end{DoxyItemize}

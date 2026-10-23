@@ -1,0 +1,39 @@
+\doxysection{jobs.\+h}
+\hypertarget{jobs_8h_source}{}\label{jobs_8h_source}\index{include/jobs.h@{include/jobs.h}}
+\doxymbox{\hyperlink{jobs_8h}{Go to the documentation of this file.}}
+\begin{DoxyCode}{0}
+\DoxyCodeLine{00001\ }
+\DoxyCodeLine{00005\ }
+\DoxyCodeLine{00006\ \textcolor{preprocessor}{\#ifndef\ JOBS\_H}}
+\DoxyCodeLine{00007\ \textcolor{preprocessor}{\#define\ JOBS\_H}}
+\DoxyCodeLine{00008\ }
+\DoxyCodeLine{00009\ \textcolor{preprocessor}{\#include\ <signal.h>}\ \ \ \textcolor{comment}{//\ for\ sig\_atomic\_t}}
+\DoxyCodeLine{00010\ \textcolor{preprocessor}{\#include\ <time.h>}\ \ \ \ \ \textcolor{comment}{//\ for\ struct\ timespec}}
+\DoxyCodeLine{00011\ \textcolor{preprocessor}{\#include\ <unistd.h>}}
+\DoxyCodeLine{00012\ }
+\DoxyCodeLine{00013\ \textcolor{preprocessor}{\#define\ MAX\_JOBS\ 10}}
+\DoxyCodeLine{00014\ \textcolor{preprocessor}{\#define\ JOB\_PIDS\_MAX\ 16\ }\textcolor{comment}{//\ most\ processes\ (pipeline\ commands)\ one\ job\ can\ track}}
+\DoxyCodeLine{00015\ \textcolor{preprocessor}{\#define\ JOB\_CMD\_MAX\ 256\ }\textcolor{comment}{//\ longer\ command\ lines\ are\ truncated\ in\ the\ listing}}
+\DoxyCodeLine{00016\ }
+\DoxyCodeLine{00017\ \textcolor{comment}{/*\ A\ job\ is\ one\ command\ line\ run\ in\ the\ background:\ a\ single\ command\ or\ a}}
+\DoxyCodeLine{00018\ \textcolor{comment}{\ *\ whole\ pipeline,\ whose\ processes\ are\ all\ part\ of\ the\ same\ job.}}
+\DoxyCodeLine{00019\ \textcolor{comment}{\ *\ Everything\ uses\ fixed-\/size\ storage\ so\ the\ SIGCHLD\ handler\ can\ update\ a}}
+\DoxyCodeLine{00020\ \textcolor{comment}{\ *\ job\ without\ malloc/free.\ */}}
+\DoxyCodeLine{00021\ \textcolor{keyword}{typedef}\ \textcolor{keyword}{struct\ }\{}
+\DoxyCodeLine{00022\ \ \ \ \ \textcolor{keyword}{volatile}\ sig\_atomic\_t\ active;\ \ \ \textcolor{comment}{//\ 0\ =\ free\ slot}}
+\DoxyCodeLine{00023\ \ \ \ \ pid\_t\ pids[JOB\_PIDS\_MAX];\ \ \ \ \ \ \ \textcolor{comment}{//\ one\ per\ process;\ 0\ once\ that\ process\ has\ finished}}
+\DoxyCodeLine{00024\ \ \ \ \ \textcolor{keywordtype}{int}\ remaining;\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ processes\ still\ running;\ the\ job\ ends\ at\ 0}}
+\DoxyCodeLine{00025\ \ \ \ \ \textcolor{keyword}{struct\ }timespec\ start\_time;\ \ \ \ \ \textcolor{comment}{//\ CLOCK\_MONOTONIC,\ for\ process\ computation\ time}}
+\DoxyCodeLine{00026\ \ \ \ \ \textcolor{keywordtype}{char}\ cmd[JOB\_CMD\_MAX];\ \ \ \ \ \ \ \ \ \ \textcolor{comment}{//\ full\ command\ line,\ for\ the\ listing}}
+\DoxyCodeLine{00027\ \}\ \doxymbox{\hyperlink{structjob__t}{job\_t}};}
+\DoxyCodeLine{00028\ }
+\DoxyCodeLine{00029\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{jobs_8h_a7ec144a9a628442e52b80210bc8364ad}{sigchld\_handler}}(\textcolor{keywordtype}{int}\ sig);}
+\DoxyCodeLine{00030\ \textcolor{keywordtype}{int}\ \doxymbox{\hyperlink{jobs_8h_a3b76578f8dc4968f6ec5cc849c247b93}{init\_jobs}}(\textcolor{keywordtype}{void});}
+\DoxyCodeLine{00031\ \textcolor{keywordtype}{int}\ \doxymbox{\hyperlink{jobs_8h_af5d22500059ec4ae2331ced71d9c18aa}{add\_job}}(\textcolor{keyword}{const}\ pid\_t\ *pids,\ \textcolor{keywordtype}{int}\ count,\ \textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *cmd);}
+\DoxyCodeLine{00032\ \textcolor{keywordtype}{int}\ \doxymbox{\hyperlink{jobs_8h_a0057c250096d23b01eef8e60280f9be0}{remove\_job}}(pid\_t\ pid);}
+\DoxyCodeLine{00033\ \textcolor{keywordtype}{int}\ \doxymbox{\hyperlink{jobs_8h_a56d674566c570843bc9fe684936267e0}{list\_jobs}}(\textcolor{keywordtype}{void});}
+\DoxyCodeLine{00034\ \textcolor{keywordtype}{void}\ \doxymbox{\hyperlink{jobs_8h_a3ca2c73c418c6056ac4728c195f89afa}{set\_waiting\_prompt}}(\textcolor{keyword}{const}\ \textcolor{keywordtype}{char}\ *line);}
+\DoxyCodeLine{00035\ }
+\DoxyCodeLine{00036\ \textcolor{preprocessor}{\#endif\ }\textcolor{comment}{//\ JOBS\_H}}
+
+\end{DoxyCode}

@@ -1,0 +1,46 @@
+\doxysection{include/\+parser.h File Reference}
+\hypertarget{parser_8h}{}\label{parser_8h}\index{include/parser.h@{include/parser.h}}
+
+
+struct cmdline and the command-\/line parser.  
+
+
+\doxysubsubsection*{Data Structures}
+\begin{DoxyCompactItemize}
+\item 
+struct \doxymbox{\hyperlink{structcmdline}{cmdline}}
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Functions}
+\begin{DoxyCompactItemize}
+\item 
+struct \doxymbox{\hyperlink{structcmdline}{cmdline}} \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{parser_8h_aa546cffc0988c02d925ec10631f5b471}{parsecmd}} (char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}pline)
+\begin{DoxyCompactList}\small\item\em Parses the line into a command line structure -\/ Separates the command into a sequence of commands, in, out and if it should run in background. \end{DoxyCompactList}\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+struct cmdline and the command-\/line parser. 
+
+
+
+\label{parser_8h_doc-func-members}
+\Hypertarget{parser_8h_doc-func-members}
+\doxysubsection{Function Documentation}
+\Hypertarget{parser_8h_aa546cffc0988c02d925ec10631f5b471}\index{parser.h@{parser.h}!parsecmd@{parsecmd}}
+\index{parsecmd@{parsecmd}!parser.h@{parser.h}}
+\doxysubsubsection{\texorpdfstring{parsecmd()}{parsecmd()}}
+{\footnotesize\ttfamily \label{parser_8h_aa546cffc0988c02d925ec10631f5b471} 
+struct \doxymbox{\hyperlink{structcmdline}{cmdline}} \texorpdfstring{$\ast$}{*} parsecmd (\begin{DoxyParamCaption}\item[{char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}}]{pline}{}\end{DoxyParamCaption})}
+
+
+
+Parses the line into a command line structure -\/ Separates the command into a sequence of commands, in, out and if it should run in background. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em pline} & the user input \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+cmdline structure containing the sequence of commands, in file, out file, err file and whether it should run in the background 
+\end{DoxyReturn}
+if s has been allocated, then free its fields

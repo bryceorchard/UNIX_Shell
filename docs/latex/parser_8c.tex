@@ -1,0 +1,118 @@
+\doxysection{src/\+parser.c File Reference}
+\hypertarget{parser_8c}{}\label{parser_8c}\index{src/parser.c@{src/parser.c}}
+
+
+Splits a command line into words and parses it into a struct cmdline: commands, pipes, redirections and the background flag.  
+
+
+{\ttfamily \+\#include "{}parser.\+h"{}}\newline
+{\ttfamily \+\#include "{}utils.\+h"{}}\newline
+{\ttfamily \+\#include $<$stddef.\+h$>$}\newline
+{\ttfamily \+\#include $<$stdio.\+h$>$}\newline
+{\ttfamily \+\#include $<$stdlib.\+h$>$}\newline
+{\ttfamily \+\#include $<$string.\+h$>$}\newline
+{\ttfamily \+\#include $<$sys/\+types.\+h$>$}\newline
+\doxysubsubsection*{Macros}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{parser_8c_a758f162b0d046d0de69791fc6f19aaae}\label{parser_8c_a758f162b0d046d0de69791fc6f19aaae} 
+\+\#define {\bfseries READ\+\_\+\+CHAR}~\texorpdfstring{$\ast$}{*}(\texorpdfstring{$\ast$}{*}cur\+\_\+buf)++ = \texorpdfstring{$\ast$}{*}(\texorpdfstring{$\ast$}{*}cur)++
+\item 
+\Hypertarget{parser_8c_a4b64282acf074c7327d0251088b9413b}\label{parser_8c_a4b64282acf074c7327d0251088b9413b} 
+\+\#define {\bfseries SKIP\+\_\+\+CHAR}~(\texorpdfstring{$\ast$}{*}cur)++
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Functions}
+\begin{DoxyCompactItemize}
+\item 
+static void \doxymbox{\hyperlink{parser_8c_a81478fa81460302ddc7fad643593a406}{read\+\_\+single\+\_\+quote}} (char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}cur, char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}cur\+\_\+buf)
+\begin{DoxyCompactList}\small\item\em Reads a single quote. \end{DoxyCompactList}\item 
+static void \doxymbox{\hyperlink{parser_8c_a1a636e785506eb25a3860fd02e292f8b}{read\+\_\+double\+\_\+quote}} (char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}cur, char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}cur\+\_\+buf)
+\begin{DoxyCompactList}\small\item\em Reads double quotes. \end{DoxyCompactList}\item 
+static void \doxymbox{\hyperlink{parser_8c_af9d0bbc64d0ee4b6e97e778aedb4c227}{read\+\_\+word}} (char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}cur, char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}cur\+\_\+buf)
+\item 
+\Hypertarget{parser_8c_a4e38bec73502595c75e63c708c312418}\label{parser_8c_a4e38bec73502595c75e63c708c312418} 
+static char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*} {\bfseries split\+\_\+in\+\_\+words} (char \texorpdfstring{$\ast$}{*}line)
+\begin{DoxyCompactList}\small\item\em Split the string in words, according to the simple shell grammar. \end{DoxyCompactList}\item 
+\Hypertarget{parser_8c_a346c98bd1d0270a3adb2f975636169b5}\label{parser_8c_a346c98bd1d0270a3adb2f975636169b5} 
+static void {\bfseries freeseq} (char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}seq)
+\item 
+\Hypertarget{parser_8c_ad368381c89f0df0b1e490141c7e62bbf}\label{parser_8c_ad368381c89f0df0b1e490141c7e62bbf} 
+static void {\bfseries freecmd} (struct \doxymbox{\hyperlink{structcmdline}{cmdline}} \texorpdfstring{$\ast$}{*}s)
+\item 
+struct \doxymbox{\hyperlink{structcmdline}{cmdline}} \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{parser_8c_aa546cffc0988c02d925ec10631f5b471}{parsecmd}} (char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}pline)
+\begin{DoxyCompactList}\small\item\em Parses the line into a command line structure -\/ Separates the command into a sequence of commands, in, out and if it should run in background. \end{DoxyCompactList}\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+Splits a command line into words and parses it into a struct cmdline: commands, pipes, redirections and the background flag. 
+
+
+
+\label{parser_8c_doc-func-members}
+\Hypertarget{parser_8c_doc-func-members}
+\doxysubsection{Function Documentation}
+\Hypertarget{parser_8c_aa546cffc0988c02d925ec10631f5b471}\index{parser.c@{parser.c}!parsecmd@{parsecmd}}
+\index{parsecmd@{parsecmd}!parser.c@{parser.c}}
+\doxysubsubsection{\texorpdfstring{parsecmd()}{parsecmd()}}
+{\footnotesize\ttfamily \label{parser_8c_aa546cffc0988c02d925ec10631f5b471} 
+struct \doxymbox{\hyperlink{structcmdline}{cmdline}} \texorpdfstring{$\ast$}{*} parsecmd (\begin{DoxyParamCaption}\item[{char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}}]{pline}{}\end{DoxyParamCaption})}
+
+
+
+Parses the line into a command line structure -\/ Separates the command into a sequence of commands, in, out and if it should run in background. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em pline} & the user input \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+cmdline structure containing the sequence of commands, in file, out file, err file and whether it should run in the background 
+\end{DoxyReturn}
+if s has been allocated, then free its fields\Hypertarget{parser_8c_a1a636e785506eb25a3860fd02e292f8b}\index{parser.c@{parser.c}!read\_double\_quote@{read\_double\_quote}}
+\index{read\_double\_quote@{read\_double\_quote}!parser.c@{parser.c}}
+\doxysubsubsection{\texorpdfstring{read\_double\_quote()}{read\_double\_quote()}}
+{\footnotesize\ttfamily \label{parser_8c_a1a636e785506eb25a3860fd02e292f8b} 
+void read\+\_\+double\+\_\+quote (\begin{DoxyParamCaption}\item[{char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}}]{cur}{, }\item[{char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}}]{cur\+\_\+buf}{}\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [static]}}
+
+
+
+Reads double quotes. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em cur} & \\
+\hline
+{\em cur\+\_\+buf} & \\
+\hline
+\end{DoxyParams}
+\Hypertarget{parser_8c_a81478fa81460302ddc7fad643593a406}\index{parser.c@{parser.c}!read\_single\_quote@{read\_single\_quote}}
+\index{read\_single\_quote@{read\_single\_quote}!parser.c@{parser.c}}
+\doxysubsubsection{\texorpdfstring{read\_single\_quote()}{read\_single\_quote()}}
+{\footnotesize\ttfamily \label{parser_8c_a81478fa81460302ddc7fad643593a406} 
+void read\+\_\+single\+\_\+quote (\begin{DoxyParamCaption}\item[{char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}}]{cur}{, }\item[{char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}}]{cur\+\_\+buf}{}\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [static]}}
+
+
+
+Reads a single quote. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em cur} & \\
+\hline
+{\em cur\+\_\+buf} & \\
+\hline
+\end{DoxyParams}
+\Hypertarget{parser_8c_af9d0bbc64d0ee4b6e97e778aedb4c227}\index{parser.c@{parser.c}!read\_word@{read\_word}}
+\index{read\_word@{read\_word}!parser.c@{parser.c}}
+\doxysubsubsection{\texorpdfstring{read\_word()}{read\_word()}}
+{\footnotesize\ttfamily \label{parser_8c_af9d0bbc64d0ee4b6e97e778aedb4c227} 
+void read\+\_\+word (\begin{DoxyParamCaption}\item[{char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}}]{cur}{, }\item[{char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}}]{cur\+\_\+buf}{}\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [static]}}
+
+
+\begin{DoxyParams}{Parameters}
+{\em cur} & \\
+\hline
+{\em cur\+\_\+buf} & \\
+\hline
+\end{DoxyParams}

@@ -1,7 +1,14 @@
 \doxysection{File List}
-Here is a list of all documented files with brief descriptions\+:\begin{DoxyCompactList}
-\item\contentsline{section}{include/\mbox{\hyperlink{executor_8h_source}{executor.\+h}} }{\pageref{executor_8h_source}}{}
-\item\contentsline{section}{include/\mbox{\hyperlink{parser_8h_source}{parser.\+h}} }{\pageref{parser_8h_source}}{}
-\item\contentsline{section}{include/\mbox{\hyperlink{shell_8h_source}{shell.\+h}} }{\pageref{shell_8h_source}}{}
-\item\contentsline{section}{include/\mbox{\hyperlink{utils_8h_source}{utils.\+h}} }{\pageref{utils_8h_source}}{}
+Here is a list of all documented files with brief descriptions:\begin{DoxyCompactList}
+\item\contentsline{section}{include/\doxymbox{\hyperlink{executor_8h}{executor.\+h}} \\*Command execution: running a single command and a whole command line }{\pageref{executor_8h}}{}
+\item\contentsline{section}{include/\doxymbox{\hyperlink{jobs_8h}{jobs.\+h}} \\*Background job table: \doxylink{structjob__t}{job\+\_\+t} and the functions that manage it }{\pageref{jobs_8h}}{}
+\item\contentsline{section}{include/\doxymbox{\hyperlink{parser_8h}{parser.\+h}} \\*Struct cmdline and the command-\/line parser }{\pageref{parser_8h}}{}
+\item\contentsline{section}{include/\doxymbox{\hyperlink{shell_8h}{shell.\+h}} \\*Prompt colours, line reading and shell termination }{\pageref{shell_8h}}{}
+\item\contentsline{section}{include/\doxymbox{\hyperlink{utils_8h}{utils.\+h}} \\*Memory allocation helpers }{\pageref{utils_8h}}{}
+\item\contentsline{section}{src/\doxymbox{\hyperlink{executor_8c}{executor.\+c}} \\*Runs parsed command lines: forks and execs each command, wires up pipes and redirection, expands wildcards and environment variables, and records background pipelines as jobs }{\pageref{executor_8c}}{}
+\item\contentsline{section}{src/\doxymbox{\hyperlink{jobs_8c}{jobs.\+c}} \\*Background job table: records jobs, reaps finished children (SIGCHLD handler), reports their computation time, redraws the prompt, and implements the {\ttfamily jobs} builtin }{\pageref{jobs_8c}}{}
+\item\contentsline{section}{src/\doxymbox{\hyperlink{main_8c}{main.\+c}} \\*Entry point: installs the SIGCHLD handler and runs the read, parse and execute loop }{\pageref{main_8c}}{}
+\item\contentsline{section}{src/\doxymbox{\hyperlink{parser_8c}{parser.\+c}} \\*Splits a command line into words and parses it into a struct cmdline: commands, pipes, redirections and the background flag }{\pageref{parser_8c}}{}
+\item\contentsline{section}{src/\doxymbox{\hyperlink{shell_8c}{shell.\+c}} \\*Reads a command line at the prompt and terminates the shell }{\pageref{shell_8c}}{}
+\item\contentsline{section}{src/\doxymbox{\hyperlink{utils_8c}{utils.\+c}} \\*Memory allocation helpers that exit on failure }{\pageref{utils_8c}}{}
 \end{DoxyCompactList}

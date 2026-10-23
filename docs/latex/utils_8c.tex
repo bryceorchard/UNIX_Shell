@@ -1,0 +1,30 @@
+\doxysection{src/\+utils.c File Reference}
+\hypertarget{utils_8c}{}\label{utils_8c}\index{src/utils.c@{src/utils.c}}
+
+
+Memory allocation helpers that exit on failure.  
+
+
+{\ttfamily \+\#include $<$errno.\+h$>$}\newline
+{\ttfamily \+\#include $<$stdio.\+h$>$}\newline
+{\ttfamily \+\#include $<$stdlib.\+h$>$}\newline
+{\ttfamily \+\#include $<$sys/\+wait.\+h$>$}\newline
+{\ttfamily \+\#include "{}utils.\+h"{}}\newline
+{\ttfamily \+\#include "{}jobs.\+h"{}}\newline
+\doxysubsubsection*{Functions}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{utils_8c_a7ed77fa6a6c954fc976858763a46339e}\label{utils_8c_a7ed77fa6a6c954fc976858763a46339e} 
+void {\bfseries memory\+\_\+error} (void)
+\item 
+\Hypertarget{utils_8c_af7b6b8fd37a3c4b944c71b783d50fc96}\label{utils_8c_af7b6b8fd37a3c4b944c71b783d50fc96} 
+void \texorpdfstring{$\ast$}{*} {\bfseries xmalloc} (size\+\_\+t size)
+\item 
+\Hypertarget{utils_8c_af1634ff7d575d04a5ad3bd26343b4e51}\label{utils_8c_af1634ff7d575d04a5ad3bd26343b4e51} 
+void \texorpdfstring{$\ast$}{*} {\bfseries xrealloc} (void \texorpdfstring{$\ast$}{*}ptr, size\+\_\+t size)
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+Memory allocation helpers that exit on failure. 
+

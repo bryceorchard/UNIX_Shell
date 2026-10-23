@@ -1,0 +1,170 @@
+\doxysection{src/\+executor.c File Reference}
+\hypertarget{executor_8c}{}\label{executor_8c}\index{src/executor.c@{src/executor.c}}
+
+
+Runs parsed command lines: forks and execs each command, wires up pipes and redirection, expands wildcards and environment variables, and records background pipelines as jobs.  
+
+
+{\ttfamily \+\#include $<$stdio.\+h$>$}\newline
+{\ttfamily \+\#include $<$stdlib.\+h$>$}\newline
+{\ttfamily \+\#include $<$unistd.\+h$>$}\newline
+{\ttfamily \+\#include $<$fcntl.\+h$>$}\newline
+{\ttfamily \+\#include $<$sys/\+wait.\+h$>$}\newline
+{\ttfamily \+\#include $<$string.\+h$>$}\newline
+{\ttfamily \+\#include $<$signal.\+h$>$}\newline
+{\ttfamily \+\#include $<$wordexp.\+h$>$}\newline
+{\ttfamily \+\#include "{}executor.\+h"{}}\newline
+{\ttfamily \+\#include "{}parser.\+h"{}}\newline
+{\ttfamily \+\#include "{}jobs.\+h"{}}\newline
+\doxysubsubsection*{Macros}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{executor_8c_ae5e8e848f2d31b75fd1831d1731e110c}\label{executor_8c_ae5e8e848f2d31b75fd1831d1731e110c} 
+\+\#define {\bfseries MAX\+\_\+\+ARG\+\_\+\+LENGTH}~1024
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Functions}
+\begin{DoxyCompactItemize}
+\item 
+static void \doxymbox{\hyperlink{executor_8c_a07fdebf01906f45315383e697b5f84c8}{set\+\_\+cloexec}} (int fd)
+\begin{DoxyCompactList}\small\item\em Marks a file descriptor close-\/on-\/exec, so a child keeps no copy of it once execvp() succeeds. The copies dup2() puts on stdin/\+stdout are not affected (dup2 clears the flag on the new descriptor). \end{DoxyCompactList}\item 
+static void \doxymbox{\hyperlink{executor_8c_a3ab97b910dccf99da05089f0b159cf18}{append\+\_\+single\+\_\+quoted}} (char \texorpdfstring{$\ast$}{*}buf, size\+\_\+t size, const char \texorpdfstring{$\ast$}{*}arg)
+\begin{DoxyCompactList}\small\item\em Appends arg to buf wrapped in single quotes, so wordexp() takes it literally. A \textquotesingle{} cannot appear inside single quotes, so each one is written as \textquotesingle{}\textbackslash{}\textquotesingle{}\textquotesingle{} (close the quotes, an escaped \textquotesingle{}, reopen the quotes). \end{DoxyCompactList}\item 
+static const char \texorpdfstring{$\ast$}{*} \doxymbox{\hyperlink{executor_8c_a8a0fc36d1494e2a1171aaa3a84ffac80}{wordexp\+\_\+error\+\_\+message}} (int code)
+\begin{DoxyCompactList}\small\item\em Describes a wordexp() error code. wordexp() returns its error instead of setting errno, so perror() cannot be used for it. \end{DoxyCompactList}\item 
+static void \doxymbox{\hyperlink{executor_8c_a8d110870507255e46d0e32e8e85f5006}{format\+\_\+command\+\_\+line}} (const struct \doxymbox{\hyperlink{structcmdline}{cmdline}} \texorpdfstring{$\ast$}{*}l, char \texorpdfstring{$\ast$}{*}buf, size\+\_\+t size)
+\begin{DoxyCompactList}\small\item\em Writes the command line of l as the user typed it (quotes removed), e.\+g. "{}cat $<$ in.\+txt \texorpdfstring{$\vert$}{|} sort $>$ out.\+txt"{}, for the job listing. \end{DoxyCompactList}\item 
+pid\+\_\+t \doxymbox{\hyperlink{executor_8c_a787589d2a0ebfdf4dc5b743cbd411916}{execute\+\_\+command}} (char \texorpdfstring{$\ast$}{*}cmd, char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}args, int in, int out, int bg, int wait\+\_\+last)
+\begin{DoxyCompactList}\small\item\em Executes a single, simple command in another process: handles the {\ttfamily jobs} builtin, forks, wires up stdin/\+stdout, execs the program, and waits for foreground ones when asked to. Background children are recorded in the job table by \doxylink{executor_8c_a79e32c301fe8283716f72d44cc3c9efe}{execute()}, once per pipeline. \end{DoxyCompactList}\item 
+int \doxymbox{\hyperlink{executor_8c_a79e32c301fe8283716f72d44cc3c9efe}{execute}} (struct \doxymbox{\hyperlink{structcmdline}{cmdline}} \texorpdfstring{$\ast$}{*}l)
+\begin{DoxyCompactList}\small\item\em Executes a command pipeline. \end{DoxyCompactList}\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+Runs parsed command lines: forks and execs each command, wires up pipes and redirection, expands wildcards and environment variables, and records background pipelines as jobs. 
+
+
+
+\label{executor_8c_doc-func-members}
+\Hypertarget{executor_8c_doc-func-members}
+\doxysubsection{Function Documentation}
+\Hypertarget{executor_8c_a3ab97b910dccf99da05089f0b159cf18}\index{executor.c@{executor.c}!append\_single\_quoted@{append\_single\_quoted}}
+\index{append\_single\_quoted@{append\_single\_quoted}!executor.c@{executor.c}}
+\doxysubsubsection{\texorpdfstring{append\_single\_quoted()}{append\_single\_quoted()}}
+{\footnotesize\ttfamily \label{executor_8c_a3ab97b910dccf99da05089f0b159cf18} 
+void append\+\_\+single\+\_\+quoted (\begin{DoxyParamCaption}\item[{char \texorpdfstring{$\ast$}{*}}]{buf}{, }\item[{size\+\_\+t}]{size}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{arg}{}\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [static]}}
+
+
+
+Appends arg to buf wrapped in single quotes, so wordexp() takes it literally. A \textquotesingle{} cannot appear inside single quotes, so each one is written as \textquotesingle{}\textbackslash{}\textquotesingle{}\textquotesingle{} (close the quotes, an escaped \textquotesingle{}, reopen the quotes). 
+
+
+\begin{DoxyParams}{Parameters}
+{\em buf} & NUL-\/terminated string to append to. \\
+\hline
+{\em size} & Total size of buf in bytes. \\
+\hline
+{\em arg} & Argument to append. \\
+\hline
+\end{DoxyParams}
+\Hypertarget{executor_8c_a79e32c301fe8283716f72d44cc3c9efe}\index{executor.c@{executor.c}!execute@{execute}}
+\index{execute@{execute}!executor.c@{executor.c}}
+\doxysubsubsection{\texorpdfstring{execute()}{execute()}}
+{\footnotesize\ttfamily \label{executor_8c_a79e32c301fe8283716f72d44cc3c9efe} 
+int execute (\begin{DoxyParamCaption}\item[{struct \doxymbox{\hyperlink{structcmdline}{cmdline}} \texorpdfstring{$\ast$}{*}}]{l}{}\end{DoxyParamCaption})}
+
+
+
+Executes a command pipeline. 
+
+Every command is started before any is waited on: waiting for each in turn deadlocks as soon as a command writes more than the pipe buffer holds, since its reader has not been started yet. So only the last command is waited on as it is launched; the earlier ones are waited on once it has finished. All descriptors the shell opens are close-\/on-\/exec, so a child keeps only its own stdin/\+stdout; in particular a writer keeps no copy of its pipe\textquotesingle{}s read end, so it gets SIGPIPE when the reader exits early (e.\+g. {\ttfamily yes \texorpdfstring{$\vert$}{|} head -\/n 1}).
+
+A background command line is recorded as a single job, whatever the number of commands in its pipeline.
+
+
+\begin{DoxyParams}{Parameters}
+{\em l} & A pointer to a cmdline structure containing the parsed command. \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+0 on success, or a non-\/zero value on error. 
+\end{DoxyReturn}
+\Hypertarget{executor_8c_a787589d2a0ebfdf4dc5b743cbd411916}\index{executor.c@{executor.c}!execute\_command@{execute\_command}}
+\index{execute\_command@{execute\_command}!executor.c@{executor.c}}
+\doxysubsubsection{\texorpdfstring{execute\_command()}{execute\_command()}}
+{\footnotesize\ttfamily \label{executor_8c_a787589d2a0ebfdf4dc5b743cbd411916} 
+pid\+\_\+t execute\+\_\+command (\begin{DoxyParamCaption}\item[{char \texorpdfstring{$\ast$}{*}}]{cmd}{, }\item[{char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}}]{args}{, }\item[{int}]{in}{, }\item[{int}]{out}{, }\item[{int}]{bg}{, }\item[{int}]{wait\+\_\+last}{}\end{DoxyParamCaption})}
+
+
+
+Executes a single, simple command in another process: handles the {\ttfamily jobs} builtin, forks, wires up stdin/\+stdout, execs the program, and waits for foreground ones when asked to. Background children are recorded in the job table by \doxylink{executor_8c_a79e32c301fe8283716f72d44cc3c9efe}{execute()}, once per pipeline. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em cmd} & Program to run (looked up in PATH). \\
+\hline
+{\em args} & NULL-\/terminated argument vector, args\+[0] == cmd. \\
+\hline
+{\em in} & File descriptor the command reads from (STDIN\+\_\+\+FILENO if none). \\
+\hline
+{\em out} & File descriptor the command writes to (STDOUT\+\_\+\+FILENO if none). \\
+\hline
+{\em bg} & Non-\/zero to run in the background (never waited on). \\
+\hline
+{\em wait\+\_\+last} & Non-\/zero to wait for the last pipe command before returning. \doxylink{executor_8c_a79e32c301fe8283716f72d44cc3c9efe}{execute()} passes 0 for every command of a pipeline but the last, so the whole pipeline is running before anything is waited on. \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+The child\textquotesingle{}s pid, 0 if the command was a builtin run in the shell itself, or -\/1 if fork failed. 
+\end{DoxyReturn}
+\Hypertarget{executor_8c_a8d110870507255e46d0e32e8e85f5006}\index{executor.c@{executor.c}!format\_command\_line@{format\_command\_line}}
+\index{format\_command\_line@{format\_command\_line}!executor.c@{executor.c}}
+\doxysubsubsection{\texorpdfstring{format\_command\_line()}{format\_command\_line()}}
+{\footnotesize\ttfamily \label{executor_8c_a8d110870507255e46d0e32e8e85f5006} 
+void format\+\_\+command\+\_\+line (\begin{DoxyParamCaption}\item[{const struct \doxymbox{\hyperlink{structcmdline}{cmdline}} \texorpdfstring{$\ast$}{*}}]{l}{, }\item[{char \texorpdfstring{$\ast$}{*}}]{buf}{, }\item[{size\+\_\+t}]{size}{}\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [static]}}
+
+
+
+Writes the command line of l as the user typed it (quotes removed), e.\+g. "{}cat $<$ in.\+txt \texorpdfstring{$\vert$}{|} sort $>$ out.\+txt"{}, for the job listing. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em l} & Parsed command line. \\
+\hline
+{\em buf} & Destination, always NUL-\/terminated (truncated if too small). \\
+\hline
+{\em size} & Size of buf in bytes. \\
+\hline
+\end{DoxyParams}
+\Hypertarget{executor_8c_a07fdebf01906f45315383e697b5f84c8}\index{executor.c@{executor.c}!set\_cloexec@{set\_cloexec}}
+\index{set\_cloexec@{set\_cloexec}!executor.c@{executor.c}}
+\doxysubsubsection{\texorpdfstring{set\_cloexec()}{set\_cloexec()}}
+{\footnotesize\ttfamily \label{executor_8c_a07fdebf01906f45315383e697b5f84c8} 
+void set\+\_\+cloexec (\begin{DoxyParamCaption}\item[{int}]{fd}{}\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [static]}}
+
+
+
+Marks a file descriptor close-\/on-\/exec, so a child keeps no copy of it once execvp() succeeds. The copies dup2() puts on stdin/\+stdout are not affected (dup2 clears the flag on the new descriptor). 
+
+
+\begin{DoxyParams}{Parameters}
+{\em fd} & Descriptor the shell opened (pipe end or redirection file). \\
+\hline
+\end{DoxyParams}
+\Hypertarget{executor_8c_a8a0fc36d1494e2a1171aaa3a84ffac80}\index{executor.c@{executor.c}!wordexp\_error\_message@{wordexp\_error\_message}}
+\index{wordexp\_error\_message@{wordexp\_error\_message}!executor.c@{executor.c}}
+\doxysubsubsection{\texorpdfstring{wordexp\_error\_message()}{wordexp\_error\_message()}}
+{\footnotesize\ttfamily \label{executor_8c_a8a0fc36d1494e2a1171aaa3a84ffac80} 
+const char \texorpdfstring{$\ast$}{*} wordexp\+\_\+error\+\_\+message (\begin{DoxyParamCaption}\item[{int}]{code}{}\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [static]}}
+
+
+
+Describes a wordexp() error code. wordexp() returns its error instead of setting errno, so perror() cannot be used for it. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em code} & Non-\/zero value returned by wordexp(). \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+A static, human-\/readable message. 
+\end{DoxyReturn}

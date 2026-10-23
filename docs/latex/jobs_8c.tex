@@ -1,0 +1,195 @@
+\doxysection{src/\+jobs.c File Reference}
+\hypertarget{jobs_8c}{}\label{jobs_8c}\index{src/jobs.c@{src/jobs.c}}
+
+
+Background job table: records jobs, reaps finished children (SIGCHLD handler), reports their computation time, redraws the prompt, and implements the {\ttfamily jobs} builtin.  
+
+
+{\ttfamily \+\#include $<$unistd.\+h$>$}\newline
+{\ttfamily \+\#include $<$stdio.\+h$>$}\newline
+{\ttfamily \+\#include $<$string.\+h$>$}\newline
+{\ttfamily \+\#include $<$time.\+h$>$}\newline
+{\ttfamily \+\#include $<$termios.\+h$>$}\newline
+{\ttfamily \+\#include $<$sys/\+wait.\+h$>$}\newline
+{\ttfamily \+\#include $<$errno.\+h$>$}\newline
+{\ttfamily \+\#include $<$stdlib.\+h$>$}\newline
+{\ttfamily \+\#include "{}jobs.\+h"{}}\newline
+\doxysubsubsection*{Macros}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{jobs_8c_a7d9ad22618bc8e9702c05f91cb87f3ba}\label{jobs_8c_a7d9ad22618bc8e9702c05f91cb87f3ba} 
+\+\#define {\bfseries KBLUE}~"{}\textbackslash{}x1B\+[34m"{}
+\item 
+\Hypertarget{jobs_8c_ac2505060f907a9cf157b3da8fe86bc33}\label{jobs_8c_ac2505060f907a9cf157b3da8fe86bc33} 
+\+\#define {\bfseries KRESET}~"{}\textbackslash{}x1b\+[0m"{}
+\end{DoxyCompactItemize}
+\doxysubsubsection*{Functions}
+\begin{DoxyCompactItemize}
+\item 
+void \doxymbox{\hyperlink{jobs_8c_a7ec144a9a628442e52b80210bc8364ad}{sigchld\+\_\+handler}} (int sig)
+\begin{DoxyCompactList}\small\item\em SIGCHLD handler: reaps every finished child (signals are not queued, so one delivery may stand for several exits) and reports finished background jobs. Only async-\/signal-\/safe calls happen here: waitpid() and \doxylink{jobs_8c_a0057c250096d23b01eef8e60280f9be0}{remove\+\_\+job()}, which uses clock\+\_\+gettime() and write(). \end{DoxyCompactList}\item 
+int \doxymbox{\hyperlink{jobs_8c_a3b76578f8dc4968f6ec5cc849c247b93}{init\+\_\+jobs}} (void)
+\begin{DoxyCompactList}\small\item\em Marks every slot of the job table free. \end{DoxyCompactList}\item 
+int \doxymbox{\hyperlink{jobs_8c_af5d22500059ec4ae2331ced71d9c18aa}{add\+\_\+job}} (const pid\+\_\+t \texorpdfstring{$\ast$}{*}pids, int count, const char \texorpdfstring{$\ast$}{*}cmd)
+\begin{DoxyCompactList}\small\item\em Records a background job (a command or a whole pipeline) in the first free slot. Call with SIGCHLD blocked, from before the first process is forked, so the handler cannot see a process of the job finish before the job is recorded. \end{DoxyCompactList}\item 
+\Hypertarget{jobs_8c_ab9fc7ee70e8b35c77cb835be5aebe470}\label{jobs_8c_ab9fc7ee70e8b35c77cb835be5aebe470} 
+static void {\bfseries append\+\_\+str} (char \texorpdfstring{$\ast$}{*}buf, size\+\_\+t size, size\+\_\+t \texorpdfstring{$\ast$}{*}len, const char \texorpdfstring{$\ast$}{*}s)
+\begin{DoxyCompactList}\small\item\em Appends a NUL-\/terminated string to buf at \texorpdfstring{$\ast$}{*}len (bounded by size). \end{DoxyCompactList}\item 
+static void \doxymbox{\hyperlink{jobs_8c_a7b025f4ef6d372c6aa60feb850a336c4}{append\+\_\+uint}} (char \texorpdfstring{$\ast$}{*}buf, size\+\_\+t size, size\+\_\+t \texorpdfstring{$\ast$}{*}len, unsigned long n, int min\+\_\+digits)
+\begin{DoxyCompactList}\small\item\em Appends the decimal digits of a non-\/negative number to buf at \texorpdfstring{$\ast$}{*}len. \end{DoxyCompactList}\item 
+static void \doxymbox{\hyperlink{jobs_8c_a4660c152333896685853a1110fd064be}{report\+\_\+job\+\_\+completion}} (int i)
+\begin{DoxyCompactList}\small\item\em Prints, in blue, how long job i ran: "{} Job \+[$<$i$>$]\+ $<$command line$>$ completed in $<$s.\+cc$>$ seconds"{}. If the shell is waiting at its prompt, the prompt line is erased first and the prompt is drawn again below the message, so it does not end up stranded above it. Anything half-\/typed on that line is discarded too, so input the user can no longer see is never run. Async-\/signal-\/safe: the message is built by hand and sent with one write(). \end{DoxyCompactList}\item 
+int \doxymbox{\hyperlink{jobs_8c_a0057c250096d23b01eef8e60280f9be0}{remove\+\_\+job}} (pid\+\_\+t pid)
+\begin{DoxyCompactList}\small\item\em Records that a background process finished. When it was the last running process of its job, prints the job\textquotesingle{}s computation time and frees the slot. Async-\/signal-\/safe (no malloc/\+free/\+stdio), so the SIGCHLD handler calls it. \end{DoxyCompactList}\item 
+int \doxymbox{\hyperlink{jobs_8c_a56d674566c570843bc9fe684936267e0}{list\+\_\+jobs}} (void)
+\begin{DoxyCompactList}\small\item\em Prints the active background jobs (the {\ttfamily jobs} builtin) with the pids of their processes still running. Runs in the main program with SIGCHLD blocked, so stdio is fine here. \end{DoxyCompactList}\item 
+void \doxymbox{\hyperlink{jobs_8c_a3ca2c73c418c6056ac4728c195f89afa}{set\+\_\+waiting\+\_\+prompt}} (const char \texorpdfstring{$\ast$}{*}line)
+\begin{DoxyCompactList}\small\item\em Tells the completion reporter whether the shell is waiting at its prompt. If it is, a completion message erases the prompt line and redraws the prompt below the message. Call with SIGCHLD blocked. \end{DoxyCompactList}\end{DoxyCompactItemize}
+\doxysubsubsection*{Variables}
+\begin{DoxyCompactItemize}
+\item 
+\Hypertarget{jobs_8c_a008a13d6f7415e75cb7f8c44bebe9245}\label{jobs_8c_a008a13d6f7415e75cb7f8c44bebe9245} 
+static \doxymbox{\hyperlink{structjob__t}{job\+\_\+t}} {\bfseries jobs} \+[MAX\+\_\+\+JOBS]
+\item 
+\Hypertarget{jobs_8c_a22dfef8db42fb84abdf4c62f4fd8a51a}\label{jobs_8c_a22dfef8db42fb84abdf4c62f4fd8a51a} 
+static volatile sig\+\_\+atomic\+\_\+t {\bfseries at\+\_\+prompt} = 0
+\item 
+\Hypertarget{jobs_8c_aec8e576046fbe7495492d8df56f9a977}\label{jobs_8c_aec8e576046fbe7495492d8df56f9a977} 
+static const char \texorpdfstring{$\ast$}{*} {\bfseries prompt\+\_\+line} = "{}"{}
+\end{DoxyCompactItemize}
+
+
+\doxysubsection{Detailed Description}
+Background job table: records jobs, reaps finished children (SIGCHLD handler), reports their computation time, redraws the prompt, and implements the {\ttfamily jobs} builtin. 
+
+
+
+\label{jobs_8c_doc-func-members}
+\Hypertarget{jobs_8c_doc-func-members}
+\doxysubsection{Function Documentation}
+\Hypertarget{jobs_8c_af5d22500059ec4ae2331ced71d9c18aa}\index{jobs.c@{jobs.c}!add\_job@{add\_job}}
+\index{add\_job@{add\_job}!jobs.c@{jobs.c}}
+\doxysubsubsection{\texorpdfstring{add\_job()}{add\_job()}}
+{\footnotesize\ttfamily \label{jobs_8c_af5d22500059ec4ae2331ced71d9c18aa} 
+int add\+\_\+job (\begin{DoxyParamCaption}\item[{const pid\+\_\+t \texorpdfstring{$\ast$}{*}}]{pids}{, }\item[{int}]{count}{, }\item[{const char \texorpdfstring{$\ast$}{*}}]{cmd}{}\end{DoxyParamCaption})}
+
+
+
+Records a background job (a command or a whole pipeline) in the first free slot. Call with SIGCHLD blocked, from before the first process is forked, so the handler cannot see a process of the job finish before the job is recorded. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em pids} & Process ids of the job\textquotesingle{}s processes; entries \texorpdfstring{$<$}{<}= 0 (commands that were not started) are skipped. \\
+\hline
+{\em count} & Number of entries in pids. \\
+\hline
+{\em cmd} & Command line shown by {\ttfamily jobs} (truncated to JOB\+\_\+\+CMD\+\_\+\+MAX -\/ 1 chars). \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+0 on success (or if no process was started, so there is nothing to record), -\/1 if the table is full or the job has more than JOB\+\_\+\+PIDS\+\_\+\+MAX processes. 
+\end{DoxyReturn}
+\Hypertarget{jobs_8c_a7b025f4ef6d372c6aa60feb850a336c4}\index{jobs.c@{jobs.c}!append\_uint@{append\_uint}}
+\index{append\_uint@{append\_uint}!jobs.c@{jobs.c}}
+\doxysubsubsection{\texorpdfstring{append\_uint()}{append\_uint()}}
+{\footnotesize\ttfamily \label{jobs_8c_a7b025f4ef6d372c6aa60feb850a336c4} 
+void append\+\_\+uint (\begin{DoxyParamCaption}\item[{char \texorpdfstring{$\ast$}{*}}]{buf}{, }\item[{size\+\_\+t}]{size}{, }\item[{size\+\_\+t \texorpdfstring{$\ast$}{*}}]{len}{, }\item[{unsigned long}]{n}{, }\item[{int}]{min\+\_\+digits}{}\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [static]}}
+
+
+
+Appends the decimal digits of a non-\/negative number to buf at \texorpdfstring{$\ast$}{*}len. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em min\+\_\+digits} & Pad with leading zeros up to this many digits. \\
+\hline
+\end{DoxyParams}
+\Hypertarget{jobs_8c_a3b76578f8dc4968f6ec5cc849c247b93}\index{jobs.c@{jobs.c}!init\_jobs@{init\_jobs}}
+\index{init\_jobs@{init\_jobs}!jobs.c@{jobs.c}}
+\doxysubsubsection{\texorpdfstring{init\_jobs()}{init\_jobs()}}
+{\footnotesize\ttfamily \label{jobs_8c_a3b76578f8dc4968f6ec5cc849c247b93} 
+int init\+\_\+jobs (\begin{DoxyParamCaption}\item[{void}]{}{}\end{DoxyParamCaption})}
+
+
+
+Marks every slot of the job table free. 
+
+\begin{DoxyReturn}{Returns}
+0 
+\end{DoxyReturn}
+\Hypertarget{jobs_8c_a56d674566c570843bc9fe684936267e0}\index{jobs.c@{jobs.c}!list\_jobs@{list\_jobs}}
+\index{list\_jobs@{list\_jobs}!jobs.c@{jobs.c}}
+\doxysubsubsection{\texorpdfstring{list\_jobs()}{list\_jobs()}}
+{\footnotesize\ttfamily \label{jobs_8c_a56d674566c570843bc9fe684936267e0} 
+int list\+\_\+jobs (\begin{DoxyParamCaption}\item[{void}]{}{}\end{DoxyParamCaption})}
+
+
+
+Prints the active background jobs (the {\ttfamily jobs} builtin) with the pids of their processes still running. Runs in the main program with SIGCHLD blocked, so stdio is fine here. 
+
+\begin{DoxyReturn}{Returns}
+0 
+\end{DoxyReturn}
+\Hypertarget{jobs_8c_a0057c250096d23b01eef8e60280f9be0}\index{jobs.c@{jobs.c}!remove\_job@{remove\_job}}
+\index{remove\_job@{remove\_job}!jobs.c@{jobs.c}}
+\doxysubsubsection{\texorpdfstring{remove\_job()}{remove\_job()}}
+{\footnotesize\ttfamily \label{jobs_8c_a0057c250096d23b01eef8e60280f9be0} 
+int remove\+\_\+job (\begin{DoxyParamCaption}\item[{pid\+\_\+t}]{pid}{}\end{DoxyParamCaption})}
+
+
+
+Records that a background process finished. When it was the last running process of its job, prints the job\textquotesingle{}s computation time and frees the slot. Async-\/signal-\/safe (no malloc/\+free/\+stdio), so the SIGCHLD handler calls it. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em pid} & Process id that finished. \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+0 on success, -\/1 if pid was not tracked. 
+\end{DoxyReturn}
+\Hypertarget{jobs_8c_a4660c152333896685853a1110fd064be}\index{jobs.c@{jobs.c}!report\_job\_completion@{report\_job\_completion}}
+\index{report\_job\_completion@{report\_job\_completion}!jobs.c@{jobs.c}}
+\doxysubsubsection{\texorpdfstring{report\_job\_completion()}{report\_job\_completion()}}
+{\footnotesize\ttfamily \label{jobs_8c_a4660c152333896685853a1110fd064be} 
+void report\+\_\+job\+\_\+completion (\begin{DoxyParamCaption}\item[{int}]{i}{}\end{DoxyParamCaption})\hspace{0.3cm}{\ttfamily [static]}}
+
+
+
+Prints, in blue, how long job i ran: "{} Job \+[$<$i$>$]\+ $<$command line$>$ completed in $<$s.\+cc$>$ seconds"{}. If the shell is waiting at its prompt, the prompt line is erased first and the prompt is drawn again below the message, so it does not end up stranded above it. Anything half-\/typed on that line is discarded too, so input the user can no longer see is never run. Async-\/signal-\/safe: the message is built by hand and sent with one write(). 
+
+
+\begin{DoxyParams}{Parameters}
+{\em i} & Index of the job in the table. \\
+\hline
+\end{DoxyParams}
+\Hypertarget{jobs_8c_a3ca2c73c418c6056ac4728c195f89afa}\index{jobs.c@{jobs.c}!set\_waiting\_prompt@{set\_waiting\_prompt}}
+\index{set\_waiting\_prompt@{set\_waiting\_prompt}!jobs.c@{jobs.c}}
+\doxysubsubsection{\texorpdfstring{set\_waiting\_prompt()}{set\_waiting\_prompt()}}
+{\footnotesize\ttfamily \label{jobs_8c_a3ca2c73c418c6056ac4728c195f89afa} 
+void set\+\_\+waiting\+\_\+prompt (\begin{DoxyParamCaption}\item[{const char \texorpdfstring{$\ast$}{*}}]{line}{}\end{DoxyParamCaption})}
+
+
+
+Tells the completion reporter whether the shell is waiting at its prompt. If it is, a completion message erases the prompt line and redraws the prompt below the message. Call with SIGCHLD blocked. 
+
+
+\begin{DoxyParams}{Parameters}
+{\em line} & The prompt exactly as printed (colour codes included), or NULL once the shell is no longer waiting at the prompt. \\
+\hline
+\end{DoxyParams}
+\Hypertarget{jobs_8c_a7ec144a9a628442e52b80210bc8364ad}\index{jobs.c@{jobs.c}!sigchld\_handler@{sigchld\_handler}}
+\index{sigchld\_handler@{sigchld\_handler}!jobs.c@{jobs.c}}
+\doxysubsubsection{\texorpdfstring{sigchld\_handler()}{sigchld\_handler()}}
+{\footnotesize\ttfamily \label{jobs_8c_a7ec144a9a628442e52b80210bc8364ad} 
+void sigchld\+\_\+handler (\begin{DoxyParamCaption}\item[{int}]{sig}{}\end{DoxyParamCaption})}
+
+
+
+SIGCHLD handler: reaps every finished child (signals are not queued, so one delivery may stand for several exits) and reports finished background jobs. Only async-\/signal-\/safe calls happen here: waitpid() and \doxylink{jobs_8c_a0057c250096d23b01eef8e60280f9be0}{remove\+\_\+job()}, which uses clock\+\_\+gettime() and write(). 
+
+
+\begin{DoxyParams}{Parameters}
+{\em sig} & Signal number (always SIGCHLD; unused). \\
+\hline
+\end{DoxyParams}
