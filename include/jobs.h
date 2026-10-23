@@ -26,5 +26,6 @@ int init_jobs(void);
 int add_job(const pid_t *pids, int count, const char *cmd);
 int remove_job(pid_t pid);
 int list_jobs(void);
+void set_waiting_prompt(const char *line);
 
 #endif // JOBS_H
