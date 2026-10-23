@@ -5,9 +5,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <limits.h> //for INT_MAX
+#include <signal.h>
 
 #include "shell.h"
 #include "utils.h"
+#include "jobs.h"
+
+#define PROMPT_LINE_MAX 128
 
 /**
  * Terminate the shell program
@@ -22,17 +26,34 @@ void terminate(char *line) {
 }
 
 /**
- * Read a line from standard input
+ * Read a line from standard input. While waiting for input, the shell is
+ * "at the prompt": a background job finishing meanwhile redraws the prompt
+ * below its completion message (see set_waiting_prompt()).
  * @param prompt A prompt to print in the shell before user input (ie: myshell>:)
  * @return User input read from standard input
  */
 char* readline(const char *prompt)
 {
+    static char prompt_line[PROMPT_LINE_MAX]; // static: the SIGCHLD handler redraws it while we wait
     size_t buf_len = 16;
     char *buf = xmalloc(buf_len * sizeof(char));
 
-    printf("%s %s %s", KMAG, prompt, KRESET);
-    if (fgets(buf, buf_len, stdin) == NULL) {
+    // Print the prompt and register it with SIGCHLD blocked, so a job that
+    // finishes meanwhile cannot interleave its message with either step.
+    sigset_t mask, prev;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGCHLD);
+    
+    sigprocmask(SIG_BLOCK, &mask, &prev);
+    snprintf(prompt_line, sizeof(prompt_line), "%s %s %s", KMAG, prompt, KRESET);
+    fputs(prompt_line, stdout);
+    fflush(stdout); // on screen before a completion message can erase it
+    set_waiting_prompt(prompt_line);
+    sigprocmask(SIG_SETMASK, &prev, NULL);
+
+    char *first = fgets(buf, buf_len, stdin);
+    set_waiting_prompt(NULL); // the user pressed Enter (or input ended)
+    if (first == NULL) {
         free(buf);
         return NULL;
     }
