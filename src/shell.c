@@ -5,11 +5,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <limits.h> //for INT_MAX
-#include <sys/wait.h>
 
 #include "shell.h"
 #include "utils.h"
-#include "jobs.h"
 
 /**
  * Terminate the shell program
