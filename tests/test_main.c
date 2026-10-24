@@ -167,7 +167,7 @@ void test_foreground_runs_command() {
     unlink(marker); // start clean
 
     char *args[] = {"sh", "-c", "echo ok > /tmp/coen346_fg_marker", NULL};
-    execute_command("sh", args, STDIN_FILENO, STDOUT_FILENO, 0, 1); // foreground, wait
+    execute_command("sh", args, STDIN_FILENO, STDOUT_FILENO, 0); // foreground, wait
 
     TEST_ASSERT(access(marker, F_OK) == 0);
     unlink(marker);
@@ -182,7 +182,7 @@ void test_foreground_blocks() {
 
     struct timeval start;
     gettimeofday(&start, NULL);
-    execute_command("sleep", args, STDIN_FILENO, STDOUT_FILENO, 0, 1); // foreground, wait
+    execute_command("sleep", args, STDIN_FILENO, STDOUT_FILENO, 0); // foreground, wait
     double dt = elapsed_since(start);
 
     TEST_ASSERT(dt >= 0.9); // we waited out the sleep
@@ -197,7 +197,7 @@ void test_background_execution() {
 
     struct timeval start;
     gettimeofday(&start, NULL);
-    execute_command("sleep", args, STDIN_FILENO, STDOUT_FILENO, 1, 0); // background
+    execute_command("sleep", args, STDIN_FILENO, STDOUT_FILENO, 1); // background
     double dt = elapsed_since(start);
 
     TEST_ASSERT(dt < 0.5); // returned without waiting for the sleep
@@ -334,7 +334,7 @@ static void capture_output(const char *line, char *buffer, size_t size) {
     int saved_fd = dup(STDOUT_FILENO);
     dup2(tmp_fd, STDOUT_FILENO);
 
-    // execute_command() prints "child background process pid" lines through
+    // execute() prints "child background process pid" lines through
     // the stdout FILE. Point that FILE at /dev/null so only the commands'
     // output is captured.
     FILE *orig = stdout;
@@ -1208,7 +1208,7 @@ void test_failed_exec_does_not_duplicate_output() {
     printf("pending\n");      // still sitting in stdout's buffer
 
     char *args[] = {"coen346_no_such_command", NULL};
-    execute_command(args[0], args, STDIN_FILENO, STDOUT_FILENO, 0, 1);
+    execute_command(args[0], args, STDIN_FILENO, STDOUT_FILENO, 0);
 
     fclose(stdout); // flushes and closes fd
     stdout = orig;
