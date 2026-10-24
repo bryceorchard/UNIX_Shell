@@ -142,8 +142,8 @@ Functions</h2></td></tr>
 <tr class="memdesc:a8a0fc36d1494e2a1171aaa3a84ffac80"><td class="mdescLeft">&#160;</td><td class="mdescRight">Describes a wordexp() error code. wordexp() returns its error instead of setting errno, so perror() cannot be used for it.  <br /></td></tr>
 <tr class="memitem:a8d110870507255e46d0e32e8e85f5006" id="r_a8d110870507255e46d0e32e8e85f5006"><td class="memItemLeft">static void&#160;</td><td class="memItemRight"><a class="el" href="#a8d110870507255e46d0e32e8e85f5006">format_command_line</a> (const struct <a class="el" href="structcmdline.html">cmdline</a> *l, char *buf, size_t size)</td></tr>
 <tr class="memdesc:a8d110870507255e46d0e32e8e85f5006"><td class="mdescLeft">&#160;</td><td class="mdescRight">Writes the command line of l as the user typed it (quotes removed), e.g. "cat &lt; in.txt | sort &gt; out.txt", for the job listing.  <br /></td></tr>
-<tr class="memitem:a787589d2a0ebfdf4dc5b743cbd411916" id="r_a787589d2a0ebfdf4dc5b743cbd411916"><td class="memItemLeft">pid_t&#160;</td><td class="memItemRight"><a class="el" href="#a787589d2a0ebfdf4dc5b743cbd411916">execute_command</a> (char *cmd, char **args, int in, int out, int bg, int wait_last)</td></tr>
-<tr class="memdesc:a787589d2a0ebfdf4dc5b743cbd411916"><td class="mdescLeft">&#160;</td><td class="mdescRight">Executes a single, simple command in another process: handles the <span class="tt">jobs</span> builtin, forks, wires up stdin/stdout, execs the program, and waits for foreground ones when asked to. Background children are recorded in the job table by <a class="el" href="#a79e32c301fe8283716f72d44cc3c9efe" title="Executes a command pipeline.">execute()</a>, once per pipeline.  <br /></td></tr>
+<tr class="memitem:af2aee1f705deee57781fea8a8339993e" id="r_af2aee1f705deee57781fea8a8339993e"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#af2aee1f705deee57781fea8a8339993e">execute_command</a> (char *cmd, char **args, int in, int out, int bg)</td></tr>
+<tr class="memdesc:af2aee1f705deee57781fea8a8339993e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Executes a single, simple command in another process: handles the <span class="tt">jobs</span> builtin, forks, wires up stdin/stdout, execs the program, and waits for it unless it runs in the background. Background children are recorded in the job table by <a class="el" href="#a79e32c301fe8283716f72d44cc3c9efe" title="Executes a command pipeline.">execute()</a>, once per pipeline.  <br /></td></tr>
 <tr class="memitem:a79e32c301fe8283716f72d44cc3c9efe" id="r_a79e32c301fe8283716f72d44cc3c9efe"><td class="memItemLeft">int&#160;</td><td class="memItemRight"><a class="el" href="#a79e32c301fe8283716f72d44cc3c9efe">execute</a> (struct <a class="el" href="structcmdline.html">cmdline</a> *l)</td></tr>
 <tr class="memdesc:a79e32c301fe8283716f72d44cc3c9efe"><td class="mdescLeft">&#160;</td><td class="mdescRight">Executes a command pipeline.  <br /></td></tr>
 </table>
@@ -222,14 +222,14 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a787589d2a0ebfdf4dc5b743cbd411916" name="a787589d2a0ebfdf4dc5b743cbd411916"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a787589d2a0ebfdf4dc5b743cbd411916">&#9670;&#160;</a></span>execute_command()</h2>
+<a id="af2aee1f705deee57781fea8a8339993e" name="af2aee1f705deee57781fea8a8339993e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af2aee1f705deee57781fea8a8339993e">&#9670;&#160;</a></span>execute_command()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">pid_t execute_command </td>
+          <td class="memname">int execute_command </td>
           <td>(</td>
           <td class="paramtype">char *</td>          <td class="paramname"><span class="paramname"><em>cmd</em></span>, </td>
         </tr>
@@ -251,25 +251,19 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>bg</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>wait_last</em></span>&#160;)</td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>bg</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
-<p>Executes a single, simple command in another process: handles the <span class="tt">jobs</span> builtin, forks, wires up stdin/stdout, execs the program, and waits for foreground ones when asked to. Background children are recorded in the job table by <a class="el" href="#a79e32c301fe8283716f72d44cc3c9efe" title="Executes a command pipeline.">execute()</a>, once per pipeline. </p>
+<p>Executes a single, simple command in another process: handles the <span class="tt">jobs</span> builtin, forks, wires up stdin/stdout, execs the program, and waits for it unless it runs in the background. Background children are recorded in the job table by <a class="el" href="#a79e32c301fe8283716f72d44cc3c9efe" title="Executes a command pipeline.">execute()</a>, once per pipeline. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">cmd</td><td>Program to run (looked up in PATH). </td></tr>
     <tr><td class="paramname">args</td><td>NULL-terminated argument vector, args[0] == cmd. </td></tr>
     <tr><td class="paramname">in</td><td>File descriptor the command reads from (STDIN_FILENO if none). </td></tr>
     <tr><td class="paramname">out</td><td>File descriptor the command writes to (STDOUT_FILENO if none). </td></tr>
-    <tr><td class="paramname">bg</td><td>Non-zero to run in the background (never waited on). </td></tr>
-    <tr><td class="paramname">wait_last</td><td>Non-zero to wait for the last pipe command before returning. <a class="el" href="#a79e32c301fe8283716f72d44cc3c9efe" title="Executes a command pipeline.">execute()</a> passes 0 for every command of a pipeline but the last, so the whole pipeline is running before anything is waited on. </td></tr>
+    <tr><td class="paramname">bg</td><td>Non-zero to return without waiting for the command. <a class="el" href="#a79e32c301fe8283716f72d44cc3c9efe" title="Executes a command pipeline.">execute()</a> passes this for background commands, and for every command of a pipeline but the last, which it waits for itself once the whole pipeline is running. </td></tr>
   </table>
   </dd>
 </dl>

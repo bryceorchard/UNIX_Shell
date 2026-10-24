@@ -5,13 +5,12 @@
 Command execution: running a single command and a whole command line.  
 
 
-{\ttfamily \+\#include $<$sys/\+types.\+h$>$}\newline
 {\ttfamily \+\#include "{}parser.\+h"{}}\newline
 \doxysubsubsection*{Functions}
 \begin{DoxyCompactItemize}
 \item 
-pid\+\_\+t \doxymbox{\hyperlink{executor_8h_a459aefd9ccfeda9b3be4d2c5e663c2b4}{execute\+\_\+command}} (char \texorpdfstring{$\ast$}{*}cmd, char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}args, int in, int out, int bg, int wait)
-\begin{DoxyCompactList}\small\item\em Executes a single, simple command in another process: handles the {\ttfamily jobs} builtin, forks, wires up stdin/\+stdout, execs the program, and waits for foreground ones when asked to. Background children are recorded in the job table by \doxylink{executor_8c_a79e32c301fe8283716f72d44cc3c9efe}{execute()}, once per pipeline. \end{DoxyCompactList}\item 
+int \doxymbox{\hyperlink{executor_8h_af2aee1f705deee57781fea8a8339993e}{execute\+\_\+command}} (char \texorpdfstring{$\ast$}{*}cmd, char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}args, int in, int out, int bg)
+\begin{DoxyCompactList}\small\item\em Executes a single, simple command in another process: handles the {\ttfamily jobs} builtin, forks, wires up stdin/\+stdout, execs the program, and waits for it unless it runs in the background. Background children are recorded in the job table by \doxylink{executor_8c_a79e32c301fe8283716f72d44cc3c9efe}{execute()}, once per pipeline. \end{DoxyCompactList}\item 
 int \doxymbox{\hyperlink{executor_8h_a79e32c301fe8283716f72d44cc3c9efe}{execute}} (struct \doxymbox{\hyperlink{structcmdline}{cmdline}} \texorpdfstring{$\ast$}{*}l)
 \begin{DoxyCompactList}\small\item\em Executes a command pipeline. \end{DoxyCompactList}\end{DoxyCompactItemize}
 
@@ -46,15 +45,15 @@ A background command line is recorded as a single job, whatever the number of co
 \begin{DoxyReturn}{Returns}
 0 on success, or a non-\/zero value on error. 
 \end{DoxyReturn}
-\Hypertarget{executor_8h_a459aefd9ccfeda9b3be4d2c5e663c2b4}\index{executor.h@{executor.h}!execute\_command@{execute\_command}}
+\Hypertarget{executor_8h_af2aee1f705deee57781fea8a8339993e}\index{executor.h@{executor.h}!execute\_command@{execute\_command}}
 \index{execute\_command@{execute\_command}!executor.h@{executor.h}}
 \doxysubsubsection{\texorpdfstring{execute\_command()}{execute\_command()}}
-{\footnotesize\ttfamily \label{executor_8h_a459aefd9ccfeda9b3be4d2c5e663c2b4} 
-pid\+\_\+t execute\+\_\+command (\begin{DoxyParamCaption}\item[{char \texorpdfstring{$\ast$}{*}}]{cmd}{, }\item[{char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}}]{args}{, }\item[{int}]{in}{, }\item[{int}]{out}{, }\item[{int}]{bg}{, }\item[{int}]{wait\+\_\+last}{}\end{DoxyParamCaption})}
+{\footnotesize\ttfamily \label{executor_8h_af2aee1f705deee57781fea8a8339993e} 
+int execute\+\_\+command (\begin{DoxyParamCaption}\item[{char \texorpdfstring{$\ast$}{*}}]{cmd}{, }\item[{char \texorpdfstring{$\ast$}{*}\texorpdfstring{$\ast$}{*}}]{args}{, }\item[{int}]{in}{, }\item[{int}]{out}{, }\item[{int}]{bg}{}\end{DoxyParamCaption})}
 
 
 
-Executes a single, simple command in another process: handles the {\ttfamily jobs} builtin, forks, wires up stdin/\+stdout, execs the program, and waits for foreground ones when asked to. Background children are recorded in the job table by \doxylink{executor_8c_a79e32c301fe8283716f72d44cc3c9efe}{execute()}, once per pipeline. 
+Executes a single, simple command in another process: handles the {\ttfamily jobs} builtin, forks, wires up stdin/\+stdout, execs the program, and waits for it unless it runs in the background. Background children are recorded in the job table by \doxylink{executor_8c_a79e32c301fe8283716f72d44cc3c9efe}{execute()}, once per pipeline. 
 
 
 \begin{DoxyParams}{Parameters}
@@ -66,9 +65,7 @@ Executes a single, simple command in another process: handles the {\ttfamily job
 \hline
 {\em out} & File descriptor the command writes to (STDOUT\+\_\+\+FILENO if none). \\
 \hline
-{\em bg} & Non-\/zero to run in the background (never waited on). \\
-\hline
-{\em wait\+\_\+last} & Non-\/zero to wait for the last pipe command before returning. \doxylink{executor_8c_a79e32c301fe8283716f72d44cc3c9efe}{execute()} passes 0 for every command of a pipeline but the last, so the whole pipeline is running before anything is waited on. \\
+{\em bg} & Non-\/zero to return without waiting for the command. \doxylink{executor_8c_a79e32c301fe8283716f72d44cc3c9efe}{execute()} passes this for background commands, and for every command of a pipeline but the last, which it waits for itself once the whole pipeline is running. \\
 \hline
 \end{DoxyParams}
 \begin{DoxyReturn}{Returns}
