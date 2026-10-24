@@ -97,20 +97,20 @@ static void format_command_line(const struct cmdline *l, char *buf, size_t size)
 /**
  * @brief Executes a single, simple command in another process: handles the
  *        `jobs` builtin, forks, wires up stdin/stdout, execs the program,
- *        and waits for foreground ones when asked to. Background children
- *        are recorded in the job table by execute(), once per pipeline.
+ *        and waits for it unless it runs in the background. Background
+ *        children are recorded in the job table by execute(), once per pipeline.
  * @param cmd  Program to run (looked up in PATH).
  * @param args NULL-terminated argument vector, args[0] == cmd.
  * @param in   File descriptor the command reads from (STDIN_FILENO if none).
  * @param out  File descriptor the command writes to (STDOUT_FILENO if none).
- * @param bg   Non-zero to run in the background (never waited on).
- * @param wait_last Non-zero to wait for the last pipe command before returning.
- *             execute() passes 0 for every command of a pipeline but the last,
- *             so the whole pipeline is running before anything is waited on.
+ * @param bg   Non-zero to return without waiting for the command. execute()
+ *             passes this for background commands, and for every command of
+ *             a pipeline but the last, which it waits for itself once the
+ *             whole pipeline is running.
  * @return The child's pid, 0 if the command was a builtin run in the shell
  *         itself, or -1 if fork failed.
  */
-pid_t execute_command(char* cmd, char** args, int in, int out, int bg, int wait_last) {
+int execute_command(char* cmd, char** args, int in, int out, int bg) {
 
     sigset_t mask, prev;
     sigemptyset(&mask);
@@ -150,10 +150,7 @@ pid_t execute_command(char* cmd, char** args, int in, int out, int bg, int wait_
     }
 
     // parent
-    if (bg) {
-        printf("child background process pid: %d\n", (int) pid);
-    }
-    else if (wait_last) {
+    if (!bg) {
         waitpid(pid, NULL, 0); // ECHILD if the SIGCHLD handler already reaped it, which is fine
     }
     return pid;
@@ -279,12 +276,15 @@ int execute(struct cmdline *l){
         }
 
         /* start execution */
-        int is_last = (l->seq[i+1] == 0);
+        // Only the last command of a foreground pipeline is waited on as it
+        // starts; the earlier ones are waited on below, once all are running.
+        int wait_now = !l->bg && l->seq[i+1] == 0;
         pids[i] = 0; // nothing to wait for unless a child is started below
         if (output.we_wordc > 0) { // a command can expand to zero words
-            pids[i] = execute_command(output.we_wordv[0], output.we_wordv, cmd_in, cmd_out, l->bg, is_last);
+            pids[i] = execute_command(output.we_wordv[0], output.we_wordv, cmd_in, cmd_out, !wait_now);
             if (pids[i] < 0) status = EXIT_FAILURE;
-            if (is_last && !l->bg) pids[i] = 0; // already waited on by the foreground
+            else if (l->bg && pids[i] > 0) printf("child background process pid: %d\n", (int) pids[i]);
+            if (wait_now) pids[i] = 0; // already waited on
         }
         wordfree(&output);
         // The children have their own copies now; the shell must drop its
